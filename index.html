@@ -6,9 +6,10 @@
   <title>Evaluación del Regente | Sistema</title>
 
   <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-  <!-- Supabase JS -->
+  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- html2pdf (PDF export) -->
@@ -30,24 +31,16 @@
     .kpi .label { font-size:.85rem; color:#6c757d; }
     .divider { height: 1px; background: rgba(0,0,0,.08); margin: 12px 0; }
     .btn { border-radius: 10px; }
-    .btn-sm { border-radius: 10px; }
-    .table td, .table th { vertical-align: middle; }
-    .help-box{
-      background:#f8f9fa;
-      border:1px solid rgba(0,0,0,.08);
-      border-radius: 10px;
-      padding:10px;
-      font-size:.9rem;
-    }
 
-    /* PDF “look sistema” */
-    #pdfReport {
-      background: #ffffff;
-      padding: 18px;
-      border-radius: 14px;
-      border: 1px solid rgba(0,0,0,.08);
-    }
-    .sig-box {
+    .score-pill { font-weight: 700; padding: .35rem .6rem; border-radius: 999px; font-size: .85rem; }
+    .score-5 { background: rgba(25,135,84,.12); color:#198754; border:1px solid rgba(25,135,84,.22); }
+    .score-4 { background: rgba(13,110,253,.10); color:#0d6efd; border:1px solid rgba(13,110,253,.22); }
+    .score-3 { background: rgba(255,193,7,.14); color:#b07a00; border:1px solid rgba(255,193,7,.30); }
+    .score-2 { background: rgba(253,126,20,.14); color:#b45500; border:1px solid rgba(253,126,20,.30); }
+    .score-1 { background: rgba(220,53,69,.14); color:#dc3545; border:1px solid rgba(220,53,69,.28); }
+    .score-ne { background: rgba(108,117,125,.14); color:#6c757d; border:1px solid rgba(108,117,125,.26); }
+
+    .sig-box{
       border: 1px dashed rgba(0,0,0,.35);
       border-radius: 12px;
       padding: 12px;
@@ -63,235 +56,298 @@
       z-index: 50;
       border-bottom: 1px solid rgba(0,0,0,.06);
     }
+
+    /* Tabs */
+    .nav-pills .nav-link{ border-radius: 999px; }
+    .nav-pills .nav-link.active{ background:#0d6efd; }
+
+    /* Spinner min */
+    .mini-spin{ width: 1rem; height: 1rem; border-width: 2px; }
+
+    /* =========================
+       PDF Export Mode (A4)
+       ========================= */
+    body.is-exporting #pdfArea{
+      display:block !important;
+      position: fixed;
+      left: -10000px;   /* fuera de pantalla */
+      top: 0;
+      width: auto;
+      height: auto;
+      overflow: visible;
+    }
+
+    body.is-exporting #pdfReport{
+      width: 210mm;          /* A4 */
+      max-width: 210mm;
+      background: #fff;
+      padding: 12mm;         /* margen interno consistente */
+      border: none;
+      border-radius: 0;
+      box-shadow: none !important;
+      font-size: 12px;
+    }
+
+    body.is-exporting #pdfReport .card{
+      box-shadow: none !important;
+    }
+
+    body.is-exporting .kpi,
+    body.is-exporting .sig-box,
+    body.is-exporting #pdfObsList > div,
+    body.is-exporting #pdfSectionBars > div,
+    body.is-exporting .avoid-break{
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    body.is-exporting .progress{ height: 8px !important; }
+    body.is-exporting .badge{ font-size: 11px; }
+
+    @page{
+      size: A4;
+      margin: 10mm;
+    }
   </style>
 </head>
 
 <body>
-  <div class="container py-3 app-shell">
-
-    <!-- HEADER FIJO -->
-    <div class="sticky-top app-header-sticky" id="appHeader">
-      <div class="d-flex justify-content-between align-items-start gap-3">
-        <div>
-          <h3 class="mb-1">Evaluación del Regente</h3>
-          <div class="soft">Evaluación → Dashboard → PDF</div>
+  <div class="app-header-sticky sticky-top">
+    <div class="container app-shell">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <div class="fw-bold">Evaluación del Regente</div>
+          <span id="envBadge" class="badge text-bg-light pill">Cargando…</span>
         </div>
-        <div class="text-end">
-          <div class="small soft">Estado</div>
-          <span id="badgeState" class="badge text-bg-secondary pill">No autenticado</span>
-          <div class="small soft mt-1">Evaluación: <span id="currentEvalLabel">—</span></div>
+        <div class="d-flex align-items-center gap-2">
+          <span id="userBadge" class="badge text-bg-light pill">No autenticado</span>
+          <button id="btnLogout" class="btn btn-sm btn-outline-secondary d-none"><i class="bi bi-box-arrow-right"></i> Salir</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- LOGIN -->
-    <div class="card mb-3 mt-3">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div class="fw-semibold">Acceso</div>
-        <div class="small soft">Histórico visible solo para tu usuario (RLS)</div>
-      </div>
+  <div class="container app-shell my-4">
+    <!-- Login -->
+    <div id="loginCard" class="card shadow-sm mb-3">
       <div class="card-body">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-5">
-            <label class="form-label">Email</label>
-            <input id="email" type="email" class="form-control" placeholder="tu@email.com">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label">Correo</label>
+            <input id="loginEmail" class="form-control" type="email" placeholder="correo@dominio.com" />
           </div>
           <div class="col-md-4">
-            <label class="form-label">Password</label>
-            <input id="password" type="password" class="form-control" placeholder="********">
+            <label class="form-label">Contraseña</label>
+            <input id="loginPass" class="form-control" type="password" placeholder="••••••••" />
           </div>
-          <div class="col-md-3 d-grid">
-            <button id="btnLogin" type="button" class="btn btn-primary">Iniciar sesión</button>
-          </div>
-        </div>
-
-        <div class="d-flex gap-2 mt-3 flex-wrap">
-          <button id="btnLogout" type="button" class="btn btn-outline-secondary" disabled>Cerrar sesión</button>
-          <button id="btnRefresh" type="button" class="btn btn-outline-dark" disabled>Actualizar histórico</button>
-        </div>
-
-        <div class="mt-3">
-          <div id="loginStatus" class="alert alert-warning mb-0">No has iniciado sesión.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- HISTÓRICO -->
-    <div class="card mb-3">
-      <div class="card-header fw-semibold">Histórico (mis evaluaciones)</div>
-      <div class="card-body">
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <label class="form-label">Filtrar por regente (contiene)</label>
-            <input id="filterName" class="form-control" placeholder="Ej: Guardado">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Desde</label>
-            <input id="filterFrom" type="date" class="form-control">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Hasta</label>
-            <input id="filterTo" type="date" class="form-control">
-          </div>
-          <div class="col-md-2 d-grid">
-            <label class="form-label">&nbsp;</label>
-            <button id="btnApplyFilters" type="button" class="btn btn-outline-primary" disabled>Filtrar</button>
-          </div>
-        </div>
-
-        <div class="table-responsive">
-          <table class="table table-sm table-striped">
-            <thead>
-              <tr>
-                <th style="width:120px;">Fecha</th>
-                <th>Regente</th>
-                <th>Laboratorio</th>
-                <th style="width:120px;">Estado</th>
-                <th style="width:260px;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyHistory">
-              <tr><td colspan="5" class="soft">Inicia sesión para ver tu histórico.</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="small soft">
-          Reglas: solo puedes <b>eliminar</b> evaluaciones en <b>Borrador</b>. El PDF solo se genera si está <b>Finalizada</b>.
-        </div>
-      </div>
-    </div>
-
-    <!-- NUEVA / EDITAR -->
-    <div class="card mb-3">
-      <div class="card-header fw-semibold">Nueva evaluación / Editar</div>
-      <div class="card-body">
-        <div class="row g-2">
-          <div class="col-md-3">
-            <label class="form-label">Fecha</label>
-            <input id="evaluationDate" type="date" class="form-control">
-          </div>
-          <div class="col-md-5">
-            <label class="form-label">Nombre del regente (evaluado)</label>
-            <input id="evaluateeName" class="form-control" placeholder="Ej: Nombre y apellido">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">Laboratorio</label>
-            <input id="labName" class="form-control" placeholder="Ej: Laboratorio Clínico CCM">
-          </div>
-        </div>
-
-        <div class="d-flex gap-2 mt-3 flex-wrap">
-          <button id="btnNew" type="button" class="btn btn-success" disabled>Crear nueva evaluación</button>
-          <button id="btnSave" type="button" class="btn btn-primary" disabled>Guardar respuestas</button>
-          <button id="btnFinalize" type="button" class="btn btn-outline-primary" disabled>Finalizar evaluación</button>
-          <button id="btnDashboard" type="button" class="btn btn-outline-dark" disabled>Ir a Dashboard</button>
-          <button id="btnPDF" type="button" class="btn btn-outline-secondary" disabled>Descargar PDF</button>
-          <button id="btnClear" type="button" class="btn btn-outline-danger" disabled>Limpiar pantalla</button>
-        </div>
-
-        <div class="mt-3" id="workMsgWrap" style="display:none;">
-          <div id="workMsg" class="alert mb-0"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TABS -->
-    <div class="card mb-3">
-      <div class="card-header">
-        <ul class="nav nav-tabs card-header-tabs" id="mainTabs" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tab-eval" data-bs-toggle="tab" data-bs-target="#pane-eval" type="button" role="tab">
-              Evaluación
+          <div class="col-md-4 d-grid">
+            <button id="btnLogin" class="btn btn-primary">
+              <span class="d-inline-flex align-items-center gap-2">
+                <span>Ingresar</span>
+                <span id="loginSpin" class="spinner-border mini-spin d-none" role="status" aria-hidden="true"></span>
+              </span>
             </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-dash" data-bs-toggle="tab" data-bs-target="#pane-dash" type="button" role="tab">
-              Dashboard / PDF
-            </button>
-          </li>
-        </ul>
-      </div>
-
-      <div class="card-body tab-content">
-        <!-- EVALUACIÓN -->
-        <div class="tab-pane fade show active" id="pane-eval" role="tabpanel" aria-labelledby="tab-eval">
-          <div class="alert alert-secondary">
-            Selecciona <b>1–5</b> o marca <b>N/E</b> (No evaluable / No aplica). N/E se excluye del cálculo.
-          </div>
-
-          <div id="questionsContainer" class="row g-3">
-            <div class="col-12 soft">Crea una nueva evaluación o abre una del histórico.</div>
           </div>
         </div>
+        <div id="loginMsg" class="mt-3 small"></div>
+      </div>
+    </div>
 
-        <!-- DASHBOARD -->
-        <div class="tab-pane fade" id="pane-dash" role="tabpanel" aria-labelledby="tab-dash">
-          <div class="d-flex gap-2 flex-wrap mb-3">
-            <button id="btnDashRefresh" type="button" class="btn btn-outline-dark" disabled>Actualizar dashboard</button>
-            <button id="btnPdfHere" type="button" class="btn btn-outline-secondary" disabled>Descargar PDF</button>
-          </div>
+    <!-- App -->
+    <div id="appRoot" class="d-none">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <ul class="nav nav-pills gap-2" id="mainTabs">
+            <li class="nav-item"><button class="nav-link active" data-tab="tabEval"><i class="bi bi-ui-checks"></i> Evaluación</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="tabDash"><i class="bi bi-bar-chart"></i> Resumen</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="tabHistory"><i class="bi bi-clock-history"></i> Historial</button></li>
+          </ul>
 
-          <div class="card">
-            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-              <span>Dashboard</span>
-              <span id="dashEvalStatus" class="badge text-bg-secondary pill">—</span>
-            </div>
-            <div class="card-body">
-              <div id="dashEmpty" class="soft">Aún no hay datos de dashboard.</div>
+          <div class="divider"></div>
 
-              <div id="dashContent" style="display:none;">
-                <div class="row g-2 mb-2">
-                  <div class="col-md-3">
-                    <div class="kpi">
-                      <div class="label">Nota global (0–100)</div>
-                      <div id="kpiTotalPct" class="value">—</div>
+          <!-- TAB: Evaluación -->
+          <div id="tabEval" class="tab-pane">
+            <div class="row g-3">
+              <div class="col-lg-4">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                      <div>
+                        <div class="fw-bold">Evaluación actual</div>
+                        <div id="evalMeta" class="small soft">—</div>
+                      </div>
+                      <span id="statusBadge" class="badge text-bg-light pill">—</span>
                     </div>
-                  </div>
-                  <div class="col-md-3">
-                    <div class="kpi">
-                      <div class="label">Nota global (1–5)</div>
-                      <div id="kpiTotal5" class="value">—</div>
+
+                    <div class="divider"></div>
+
+                    <div class="small soft">Objetivo</div>
+                    <div class="fw-semibold">Evaluar desempeño y cumplimiento del Regente</div>
+
+                    <div class="divider"></div>
+
+                    <div class="d-grid gap-2">
+                      <button id="btnSubmit" class="btn btn-success" disabled>
+                        <i class="bi bi-check2-circle"></i> Finalizar (Enviar)
+                      </button>
+                      <button id="btnDraft" class="btn btn-outline-primary" disabled>
+                        <i class="bi bi-save2"></i> Guardar borrador
+                      </button>
+                      <button id="btnPDFHere" class="btn btn-outline-secondary" disabled>
+                        <i class="bi bi-filetype-pdf"></i> Descargar PDF (Finalizada)
+                      </button>
+                      <div id="pdfHint" class="small soft">
+                        Para generar el PDF, la evaluación debe estar <b>Finalizada</b>.
+                      </div>
                     </div>
+
+                    <div class="divider"></div>
+                    <div class="small soft">Mensaje</div>
+                    <div id="workMsg" class="small">—</div>
                   </div>
-                  <div class="col-md-3">
-                    <div class="kpi">
-                      <div class="label">Resultado cualitativo</div>
-                      <div id="kpiQualTag" class="value" style="font-size:1.05rem;">—</div>
-                      <div id="kpiQualMsg" class="soft small mt-1">—</div>
-                    </div>
-                  </div>
-                  <div class="col-md-3">
-                    <div class="kpi">
-                      <div class="label">Críticos ≤ 2 / N/E</div>
-                      <div class="value"><span id="kpiCritical">—</span> <span class="soft">/</span> <span id="kpiNE">—</span></div>
-                      <div class="soft small mt-1">Críticos / N/E</div>
+                </div>
+
+                <div class="card mt-3">
+                  <div class="card-body">
+                    <div class="fw-bold">Filtros</div>
+                    <div class="small soft">Secciones y búsqueda</div>
+                    <div class="divider"></div>
+
+                    <label class="form-label small">Sección</label>
+                    <select id="filterSection" class="form-select">
+                      <option value="">Todas</option>
+                    </select>
+
+                    <label class="form-label small mt-2">Buscar pregunta</label>
+                    <input id="filterText" class="form-control" placeholder="Palabra clave…" />
+
+                    <div class="d-grid mt-3">
+                      <button id="btnApplyFilters" class="btn btn-outline-secondary">
+                        <i class="bi bi-funnel"></i> Aplicar
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                <div class="divider"></div>
+              </div>
 
+              <div class="col-lg-8">
+                <div id="questionList" class="d-grid gap-3">
+                  <!-- preguntas -->
+                </div>
+              </div>
+            </div>
+
+            <div class="sticky-actions mt-3">
+              <div class="card shadow-sm">
+                <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <div class="small soft">
+                    <i class="bi bi-info-circle"></i> Guarda borrador para continuar luego. Finaliza cuando todo esté completo.
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button id="btnDraft2" class="btn btn-outline-primary" disabled><i class="bi bi-save2"></i> Guardar borrador</button>
+                    <button id="btnSubmit2" class="btn btn-success" disabled><i class="bi bi-check2-circle"></i> Finalizar</button>
+                    <button id="btnPDF" class="btn btn-outline-secondary" disabled><i class="bi bi-filetype-pdf"></i> PDF</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /tabEval -->
+
+          <!-- TAB: Dashboard -->
+          <div id="tabDash" class="tab-pane d-none">
+            <div class="row g-3">
+              <div class="col-lg-8">
                 <div class="row g-3">
-                  <div class="col-lg-7">
-                    <div class="fw-semibold mb-2">Puntaje por sección (1–5)</div>
-                    <div id="sectionBars" class="vstack gap-2"></div>
-                    <div class="small soft mt-2">Ponderación: A=60% (A1 10, A2 25, A3 15, A4 10), B1=25%, C1=10%, D1=5%.</div>
+                  <div class="col-md-4">
+                    <div class="kpi">
+                      <div class="label">Nota ponderada (0–100)</div>
+                      <div id="kpiScore" class="value">—</div>
+                      <div id="kpiQual" class="small soft">—</div>
+                    </div>
                   </div>
-                  <div class="col-lg-5">
-                    <div class="fw-semibold mb-2">Alertas (críticos ≤ 2)</div>
-                    <div id="criticalList" class="vstack gap-2"></div>
-                    <div class="small soft mt-2">Tip: estos puntos suelen ir al plan 30–60–90.</div>
+                  <div class="col-md-4">
+                    <div class="kpi">
+                      <div class="label">Preguntas respondidas</div>
+                      <div id="kpiAnswered" class="value">—</div>
+                      <div class="small soft">de <span id="kpiTotal">—</span></div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="kpi">
+                      <div class="label">Críticas ≤ 2</div>
+                      <div id="kpiCritical" class="value">—</div>
+                      <div class="small soft">Requieren atención</div>
+                    </div>
                   </div>
                 </div>
 
-                <div class="divider"></div>
-                <div id="pdfRuleHint" class="small soft">
-                  Para generar el PDF, la evaluación debe estar <b>Finalizada</b>.
+                <div class="card mt-3">
+                  <div class="card-body">
+                    <div class="fw-bold">Promedios por sección</div>
+                    <div class="small soft">Peso aplicado por sección</div>
+                    <div class="divider"></div>
+                    <div id="sectionBars" class="d-grid gap-2"></div>
+                  </div>
                 </div>
-              </div><!-- /dashContent -->
+
+                <div class="card mt-3">
+                  <div class="card-body">
+                    <div class="fw-bold">Observaciones</div>
+                    <div class="small soft">Preguntas críticas y evidencias registradas</div>
+                    <div class="divider"></div>
+                    <div id="obsList" class="d-grid gap-2"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-lg-4">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="fw-bold">Datos</div>
+                    <div class="small soft">Evaluado / Fecha / Laboratorio</div>
+                    <div class="divider"></div>
+                    <div class="small"><b>Evaluado:</b> <span id="dashEvaluatee">—</span></div>
+                    <div class="small"><b>Fecha:</b> <span id="dashDate">—</span></div>
+                    <div class="small"><b>Laboratorio:</b> <span id="dashLab">—</span></div>
+                    <div class="divider"></div>
+                    <div class="small soft">Acciones</div>
+                    <div class="d-grid gap-2 mt-2">
+                      <button id="btnRefreshDash" class="btn btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+                      <button id="btnPDFDash" class="btn btn-outline-secondary" disabled><i class="bi bi-filetype-pdf"></i> PDF</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card mt-3">
+                  <div class="card-body">
+                    <div class="fw-bold">Firma</div>
+                    <div class="small soft">Evaluador</div>
+                    <div class="divider"></div>
+                    <div class="sig-box">
+                      <div id="sigName" class="fw-semibold">—</div>
+                      <div id="sigRole" class="small soft">—</div>
+                      <div id="sigDate" class="small soft">—</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div><!-- /card -->
+          </div><!-- /tabDash -->
+
+          <!-- TAB: Historial -->
+          <div id="tabHistory" class="tab-pane d-none">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <div>
+                <div class="fw-bold">Historial</div>
+                <div class="small soft">Evaluaciones finalizadas</div>
+              </div>
+              <button id="btnReloadHistory" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-clockwise"></i> Recargar</button>
+            </div>
+            <div id="historyList" class="d-grid gap-2"></div>
+          </div><!-- /tabHistory -->
+
         </div>
       </div>
     </div>
@@ -304,1126 +360,531 @@
             <div class="h5 mb-1">Resumen de Evaluación del Regente</div>
             <div class="soft">Generado por el sistema (solo evaluaciones finalizadas)</div>
           </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="row g-2">
-          <div class="col-md-4">
-            <div class="kpi">
-              <div class="label">Fecha</div>
-              <div class="value" style="font-size:1.1rem" id="pdfDate">—</div>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="kpi">
-              <div class="label">Regente</div>
-              <div class="value" style="font-size:1.1rem" id="pdfEvaluatee">—</div>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="kpi">
-              <div class="label">Laboratorio</div>
-              <div class="value" style="font-size:1.1rem" id="pdfLab">—</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="row g-2 mt-2">
-          <div class="col-md-12">
-            <div class="kpi">
-              <div class="label">Evaluador</div>
-              <div class="value" style="font-size:1.05rem;" id="pdfEvaluatorName">—</div>
-              <div class="soft small" id="pdfEvaluatorMeta">—</div>
-            </div>
+          <div class="text-end small">
+            <div><b>Fecha:</b> <span id="pdfDate">—</span></div>
+            <div><b>Evaluado:</b> <span id="pdfEvaluatee">—</span></div>
+            <div><b>Laboratorio:</b> <span id="pdfLab">—</span></div>
           </div>
         </div>
 
         <div class="divider"></div>
 
         <div class="row g-2">
-          <div class="col-md-4">
+          <div class="col-4">
             <div class="kpi">
-              <div class="label">Nota global (0–100)</div>
-              <div class="value" id="pdfTotalPct">—</div>
+              <div class="label">Nota ponderada</div>
+              <div id="pdfScore" class="value">—</div>
+              <div id="pdfQual" class="small soft">—</div>
             </div>
           </div>
-          <div class="col-md-4">
+          <div class="col-4">
             <div class="kpi">
-              <div class="label">Nota global (1–5)</div>
-              <div class="value" id="pdfTotal5">—</div>
+              <div class="label">Respondidas</div>
+              <div id="pdfAnswered" class="value">—</div>
+              <div class="small soft">de <span id="pdfTotal">—</span></div>
             </div>
           </div>
-          <div class="col-md-4">
+          <div class="col-4">
             <div class="kpi">
-              <div class="label">Resultado cualitativo</div>
-              <div class="value" style="font-size:1.05rem;" id="pdfQualTag">—</div>
-              <div class="soft small mt-1" id="pdfQualMsg">—</div>
+              <div class="label">Críticas ≤ 2</div>
+              <div id="pdfCritical" class="value">—</div>
+              <div class="small soft">Atención prioritaria</div>
             </div>
           </div>
         </div>
 
-        <div class="divider"></div>
-
-        <div class="fw-semibold mb-2">Puntaje por sección</div>
-        <div id="pdfSectionBars" class="vstack gap-2"></div>
-
-        <div class="divider"></div>
-
-        <div class="fw-semibold mb-2">Observaciones / Evidencia relevante</div>
-        <div class="small soft mb-2">Se listan ítems críticos ≤ 2 y evidencias no vacías.</div>
-        <div id="pdfObsList" class="vstack gap-2"></div>
-
-        <div class="divider"></div>
-
-        <div class="row g-3 mt-1">
-          <div class="col-md-6">
-            <div class="sig-box">
-              <div class="fw-semibold">Firma Evaluador</div>
-              <div class="soft small">Nombre: ______________________________</div>
-              <div class="soft small">Firma:  _______________________________</div>
-              <div class="soft small">Fecha:  _______________________________</div>
-            </div>
+        <div class="card mt-3">
+          <div class="card-body">
+            <div class="fw-bold">Promedios por sección</div>
+            <div class="small soft">Peso aplicado por sección</div>
+            <div class="divider"></div>
+            <div id="pdfSectionBars" class="d-grid gap-2"></div>
           </div>
-          <div class="col-md-6">
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-body">
+            <div class="fw-bold">Observaciones</div>
+            <div class="small soft">Críticos y evidencias</div>
+            <div class="divider"></div>
+            <div id="pdfObsList" class="d-grid gap-2"></div>
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-body">
+            <div class="fw-bold">Firma</div>
+            <div class="small soft">Evaluador</div>
+            <div class="divider"></div>
             <div class="sig-box">
-              <div class="fw-semibold">Firma Regente</div>
-              <div class="soft small">Nombre: ______________________________</div>
-              <div class="soft small">Firma:  _______________________________</div>
-              <div class="soft small">Fecha:  _______________________________</div>
+              <div id="pdfSigName" class="fw-semibold">—</div>
+              <div id="pdfSigRole" class="small soft">—</div>
+              <div id="pdfSigDate" class="small soft">—</div>
             </div>
           </div>
         </div>
 
         <div class="small soft mt-3">
-          Nota: Este resumen es un soporte de evaluación y seguimiento.
+          Este documento resume resultados. Para auditoría, conservar evidencias y bitácoras asociadas.
         </div>
       </div>
     </div>
 
-    <!-- Sticky bar -->
-    <div class="sticky-actions mt-3">
-      <div class="bg-white border rounded p-2 d-flex justify-content-between align-items-center">
-        <div class="small">
-          <span class="soft">Evaluación actual:</span>
-          <span id="stickyEval">—</span>
-        </div>
-        <div class="d-flex gap-2">
-          <button id="btnSaveSmall" type="button" class="btn btn-primary btn-sm" disabled>Guardar</button>
-          <button id="btnTop" type="button" class="btn btn-outline-secondary btn-sm">Arriba</button>
-        </div>
-      </div>
-    </div>
-
-  </div>
+  </div><!-- /container -->
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
-    /*************************************************************
-     * Supabase
-     *************************************************************/
-    const SUPABASE_URL = 'https://mtlldnogibdrddtjajzx.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_eBe961SXxzb6-dlDtofE0Q_upzm4iEv';
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // =============================
+    // CONFIG: Supabase
+    // =============================
+    const SUPABASE_URL = "https://YOURPROJECT.supabase.co";
+    const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
 
-    /*************************************************************
-     * Help (42) - (se mantiene en tu versión anterior)
-     *************************************************************/
-    const HELP = {
-      1:"Regencia efectiva (no nominal): rondas/supervisión, decisiones técnicas, revisión de QC, validación, evidencia.",
-      2:"Documentación vigente: nombramiento, credenciales, alcance y disponibilidad ante inspecciones.",
-      3:"Inspecciones/auditorías: respuesta, plan de acción, cierres en plazo y no reincidencia.",
-      4:"Ética: no prestar nombre; actuación ante irregularidades.",
-      5:"Continuidad: sustitución formal/cobertura documentada en ausencias.",
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      6:"SOP aplicados: pre/ana/post; el personal los conoce y los usa.",
-      7:"No conformidades: registro, causa raíz, CAPA y verificación de efectividad.",
-      8:"Control de cambios: métodos/LIS/formatos con validación y comunicación.",
-      9:"TAT: mide tiempos y ejecuta acciones ante cuellos de botella.",
-      10:"Trazabilidad: muestra→proceso→resultado→reporte; aceptación/rechazo documentados.",
-      11:"QC: frecuencia, niveles, criterios, acciones ante desvíos y documentación.",
-      12:"EQA (si aplica): desempeño y acciones ante desvíos.",
-      13:"Quejas: análisis, respuesta y acciones preventivas.",
-
-      14:"Equipos: mantenimiento/calibración/verificación; bitácoras y criterio ante fallas.",
-      15:"Reactivos: lotes/caducidad/cadena de frío; registros y acciones ante desviaciones.",
-      16:"Inventario: quiebres/vencimientos; planificación y reposición.",
-      17:"Proveedores: evaluación, incidentes y seguimiento.",
-      18:"Infraestructura: áreas, flujo, limpieza, señalización, condiciones.",
-      19:"Incidentes técnicos: contingencia, trazabilidad y comunicación.",
-
-      20:"Bioseguridad: EPP, derrames/accidentes, capacitación y cumplimiento real.",
-      21:"Desechos: segregación, rotulación y disposición con evidencias.",
-      22:"Confidencialidad: accesos, impresiones y envío seguro.",
-      23:"Críticos: protocolo, tiempos, registro y escalamiento.",
-      24:"Cultura de seguridad: reporte, análisis y mejoras.",
-
-      25:"Roles y expectativas claras; seguimiento.",
-      26:"Disciplina consistente y documentada; enfoque de mejora.",
-      27:"Respeto y equidad; distribución de carga.",
-      28:"Conflictos: método y compromisos claros.",
-      29:"Lidera con ejemplo: SOP, puntualidad, orden.",
-      30:"Continuidad: turnos/ausencias/picos con plan.",
-      31:"Capacitación y competencia; feedback.",
-      32:"Cultura de calidad: participación en mejoras y reporte de desviaciones.",
-
-      33:"Atención a médicos: oportunidad, claridad, canal definido.",
-      34:"Asesoría: selección de pruebas, interferencias, limitaciones.",
-      35:"Críticos con médicos: confirmación y escalamiento.",
-      36:"Discrepancias: resolución con trazabilidad.",
-      37:"Relación profesional y coordinación inter-áreas.",
-
-      38:"Mejoras basadas en métricas.",
-      39:"Implementa mejoras con control y validación.",
-      40:"Gestión del cambio con validación/capacitación.",
-      41:"Proyección de capacidad/recursos/inversión.",
-      42:"Riesgos: prevención y planes con responsables."
+    // =============================
+    // CONSTANTES (secciones/pesos)
+    // =============================
+    const SECTION_WEIGHTS = {
+      "Gestión y administración": 20,
+      "Regencia técnica": 25,
+      "Bioseguridad y riesgos": 20,
+      "Calidad y documentación": 20,
+      "Gestión de equipo e infraestructura": 15
     };
 
-    /*************************************************************
-     * Config
-     *************************************************************/
-    const SECTION_WEIGHTS = { A1:10, A2:25, A3:15, A4:10, B1:25, C1:10, D1:5 };
-    const SECTION_ORDER = ['A1','A2','A3','A4','B1','C1','D1'];
-    const SECTION_TITLES = {
-      A1: 'Regencia y cumplimiento',
-      A2: 'Calidad y control del proceso',
-      A3: 'Equipos / reactivos / infraestructura',
-      A4: 'Bioseguridad y confidencialidad',
-      B1: 'Liderazgo y personal',
-      C1: 'Comunicación con médicos',
-      D1: 'Iniciativa y proyección'
+    const SECTION_ORDER = Object.keys(SECTION_WEIGHTS);
+
+    const QUAL_LABEL = (score100) => {
+      if (score100 >= 90) return { label: "Excelente", msg: "Desempeño sobresaliente." };
+      if (score100 >= 80) return { label: "Muy bueno", msg: "Cumple con alto estándar." };
+      if (score100 >= 70) return { label: "Bueno", msg: "Cumple, con oportunidades de mejora." };
+      if (score100 >= 60) return { label: "Regular", msg: "Requiere acciones correctivas." };
+      return { label: "Deficiente", msg: "Riesgo alto: intervención inmediata." };
     };
 
-    /*************************************************************
-     * Estado
-     *************************************************************/
+    // =============================
+    // ESTADO
+    // =============================
     let currentUser = null;
+    let currentEval = null;
     let questionBank = [];
-    let currentEval = null; // evaluations row
-
-    // Fuente de verdad: mapa
-    let currentResponsesMap = new Map();
-
-    // snapshot del último cálculo
+    let answersMap = new Map(); // question_id -> {score,evidence}
     let lastDashboard = null;
 
-    /*************************************************************
-     * UI helpers
-     *************************************************************/
-    function setStateBadge(text, cls) {
-      const el = document.getElementById('badgeState');
-      el.className = 'badge pill ' + cls;
-      el.textContent = text;
+    // =============================
+    // UI Helpers
+    // =============================
+    function setLoginMsg(type, text){
+      const el = document.getElementById('loginMsg');
+      el.className = `mt-3 small text-${type}`;
+      el.textContent = text || '';
     }
-    function setLoginMsg(type, msg) {
-      const el = document.getElementById('loginStatus');
-      el.className = 'alert mb-0 alert-' + type;
-      el.textContent = msg;
-    }
-    function workMsg(type, msg) {
-      document.getElementById('workMsgWrap').style.display = 'block';
+
+    function workMsg(type, text){
       const el = document.getElementById('workMsg');
-      el.className = 'alert mb-0 alert-' + type;
-      el.textContent = msg;
+      el.className = `small text-${type}`;
+      el.textContent = text || '';
     }
-    function clearWorkMsg() {
-      document.getElementById('workMsgWrap').style.display = 'none';
+
+    function setStatusBadge(status){
+      const el = document.getElementById('statusBadge');
+      if (!status){
+        el.textContent = '—';
+        el.className = 'badge text-bg-light pill';
+        return;
+      }
+      let cls = 'text-bg-light';
+      if (status === 'draft') cls = 'text-bg-warning';
+      if (status === 'submitted') cls = 'text-bg-success';
+      el.textContent = status === 'submitted' ? 'Finalizada' : (status === 'draft' ? 'Borrador' : status);
+      el.className = `badge ${cls} pill`;
     }
-    function todayISO() {
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth()+1).padStart(2,'0');
-      const dd = String(d.getDate()).padStart(2,'0');
-      return `${yyyy}-${mm}-${dd}`;
+
+    function setEnvBadge(){
+      const el = document.getElementById('envBadge');
+      const isProd = SUPABASE_URL.includes('supabase.co') && !SUPABASE_URL.includes('YOURPROJECT');
+      el.textContent = isProd ? 'Producción' : 'Config pendiente';
+      el.className = `badge ${isProd ? 'text-bg-success' : 'text-bg-warning'} pill`;
     }
-    document.getElementById('evaluationDate').value = todayISO();
+
+    function enableWorkButtons(enabled){
+      document.getElementById('btnDraft').disabled = !enabled;
+      document.getElementById('btnDraft2').disabled = !enabled;
+      document.getElementById('btnSubmit').disabled = !enabled;
+      document.getElementById('btnSubmit2').disabled = !enabled;
+
+      const allowPDF = enabled && (currentEval?.status === 'submitted');
+      document.getElementById('btnPDF').disabled = !allowPDF;
+      document.getElementById('btnPDFHere').disabled = !allowPDF;
+      document.getElementById('btnPDFDash').disabled = !allowPDF;
+    }
+
+    function switchTab(tabId){
+      for (const btn of document.querySelectorAll('#mainTabs .nav-link')) {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+      }
+      for (const pane of document.querySelectorAll('.tab-pane')) {
+        pane.classList.toggle('d-none', pane.id !== tabId);
+      }
+    }
+
+    function switchToDashboardTab(){
+      switchTab('tabDash');
+    }
+
+    function esc(s){ return (s ?? '').toString(); }
 
     function escapeHtml(str) {
-      return String(str || '')
+      return String(str ?? '')
         .replaceAll('&','&amp;')
         .replaceAll('<','&lt;')
-        .replaceAll('>','&gt;');
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
     }
 
-    function enableWorkButtons(enabled) {
-      document.getElementById('btnNew').disabled = !enabled;
-      document.getElementById('btnClear').disabled = !enabled;
-      document.getElementById('btnApplyFilters').disabled = !enabled;
-      document.getElementById('btnRefresh').disabled = !enabled;
-    }
-    function enableEvalButtons(enabled) {
-      document.getElementById('btnSave').disabled = !enabled;
-      document.getElementById('btnSaveSmall').disabled = !enabled;
-      document.getElementById('btnFinalize').disabled = !enabled;
-      document.getElementById('btnDashboard').disabled = !enabled;
-      document.getElementById('btnDashRefresh').disabled = !enabled;
-      // PDF se decide por status => se maneja en updateActionAvailability()
-      document.getElementById('btnPDF').disabled = true;
-      document.getElementById('btnPdfHere').disabled = true;
+    // =============================
+    // AUTH
+    // =============================
+    async function login(email, password){
+      setLoginMsg('secondary','Autenticando…');
+      document.getElementById('loginSpin').classList.remove('d-none');
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      document.getElementById('loginSpin').classList.add('d-none');
+      if (error) { setLoginMsg('danger', error.message); return null; }
+      return data.user;
     }
 
-    function setEvalLabel() {
-      const has = !!currentEval?.evaluation_id;
-      document.getElementById('currentEvalLabel').textContent = has ? 'Activa' : '—';
-      document.getElementById('stickyEval').textContent = has ? 'Activa' : '—';
-    }
-
-    function setCurrentEvalUI() {
-      if (currentEval?.evaluation_date) document.getElementById('evaluationDate').value = currentEval.evaluation_date;
-      if (currentEval?.evaluatee_full_name) document.getElementById('evaluateeName').value = currentEval.evaluatee_full_name;
-      document.getElementById('labName').value = currentEval?.lab_name || '';
-      setEvalLabel();
-      updateActionAvailability();
-    }
-
-    function switchToDashboardTab() {
-      new bootstrap.Tab(document.querySelector('#tab-dash')).show();
-    }
-    function switchToEvalTab() {
-      new bootstrap.Tab(document.querySelector('#tab-eval')).show();
-    }
-
-    // Scroll con offset (header sticky)
-    function scrollToWithOffset(element, offsetPx = 90) {
-      if (!element) return;
-      const y = element.getBoundingClientRect().top + window.scrollY - offsetPx;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
-
-    // Top
-    document.getElementById('btnTop').addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
-
-    /*************************************************************
-     * Disponibilidad de acciones (PDF solo si submitted)
-     *************************************************************/
-    function updateActionAvailability(){
-      const hasEval = !!currentEval?.evaluation_id;
-      const isDraft = currentEval?.status === 'draft';
-      const isSubmitted = currentEval?.status === 'submitted';
-
-      // Estado badge en dashboard
-      const st = document.getElementById('dashEvalStatus');
-      if (st){
-        if (!hasEval) { st.className='badge text-bg-secondary pill'; st.textContent='—'; }
-        else if (isDraft) { st.className='badge text-bg-secondary pill'; st.textContent='Borrador'; }
-        else if (isSubmitted) { st.className='badge text-bg-success pill'; st.textContent='Finalizada'; }
-        else { st.className='badge text-bg-dark pill'; st.textContent=currentEval?.status || '—'; }
-      }
-
-      // Dashboard siempre disponible si hay evaluación
-      document.getElementById('btnDashRefresh').disabled = !hasEval;
-      document.getElementById('btnDashboard').disabled = !hasEval;
-
-      // PDF SOLO si submitted
-      document.getElementById('btnPDF').disabled = !isSubmitted;
-      document.getElementById('btnPdfHere').disabled = !isSubmitted;
-
-      // Además: si no es submitted, deja claro
-      const hint = document.getElementById('pdfRuleHint');
-      if (hint){
-        hint.style.display = isSubmitted ? 'none' : 'block';
-      }
-    }
-
-    /*************************************************************
-     * Qualitative label
-     *************************************************************/
-    function qualitativeLabel(totalPct){
-      if (totalPct >= 90) return { tag:'Sobresaliente', msg:'Cumplimiento robusto y liderazgo consistente. Mantener y estandarizar buenas prácticas.' };
-      if (totalPct >= 80) return { tag:'Muy buen desempeño', msg:'Cumple el estándar con oportunidades puntuales de mejora. Enfocar en cierre de brechas.' };
-      if (totalPct >= 60) return { tag:'Cumple con mejoras', msg:'Existen brechas relevantes. Requiere plan 30–60–90 días y seguimiento.' };
-      return { tag:'Requiere plan correctivo', msg:'Riesgo operacional y/o regulatorio. Implementar plan correctivo inmediato con seguimiento.' };
-    }
-
-    /*************************************************************
-     * Fuente de verdad: MAPA
-     *************************************************************/
-    function ensureResponse(qid) {
-      if (!currentResponsesMap.has(qid)) {
-        currentResponsesMap.set(qid, { question_id: qid, score: null, is_ne: false, evidence_text: '' });
-      }
-      return currentResponsesMap.get(qid);
-    }
-
-    function setResponse(qid, patch) {
-      const r = ensureResponse(qid);
-      Object.assign(r, patch);
-      if (r.is_ne === true) r.score = null;
-      currentResponsesMap.set(qid, r);
-    }
-
-    function snapshotRows() {
-      for (const q of questionBank) ensureResponse(q.question_id);
-      return Array.from(currentResponsesMap.values());
-    }
-
-    /*************************************************************
-     * Login / Logout
-     *************************************************************/
-    document.getElementById('btnLogin').addEventListener('click', async () => {
-      try {
-        clearWorkMsg();
-        const email = document.getElementById('email').value.trim();
-        const password = document.getElementById('password').value;
-        if (!email || !password) return setLoginMsg('danger', 'Ingresa email y password.');
-
-        setLoginMsg('warning', 'Iniciando sesión...');
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-
-        currentUser = data.user;
-
-        setLoginMsg('success', 'Sesión iniciada: ' + currentUser.email);
-        setStateBadge('Autenticado', 'text-bg-success');
-
-        // Privacidad: limpia password tras login
-        document.getElementById('password').value = '';
-
-        document.getElementById('btnLogout').disabled = false;
-        enableWorkButtons(true);
-        document.getElementById('btnApplyFilters').disabled = false;
-
-        await loadQuestionBank();
-        await loadHistory();
-
-        workMsg('info', 'Listo. Crea una evaluación o abre una del histórico.');
-      } catch (e) {
-        setLoginMsg('danger', 'Error de login: ' + (e.message || e));
-        setStateBadge('Error', 'text-bg-danger');
-      }
-    });
-
-    document.getElementById('btnLogout').addEventListener('click', async () => {
-      await supabaseClient.auth.signOut();
-
+    async function logout(){
+      await sb.auth.signOut();
       currentUser = null;
-      questionBank = [];
       currentEval = null;
-      currentResponsesMap = new Map();
+      answersMap = new Map();
       lastDashboard = null;
-
-      document.getElementById('tbodyHistory').innerHTML = '<tr><td colspan="5" class="soft">Inicia sesión para ver tu histórico.</td></tr>';
-      document.getElementById('questionsContainer').innerHTML = '<div class="col-12 soft">Crea una nueva evaluación o abre una del histórico.</div>';
-
-      document.getElementById('dashEmpty').style.display = 'block';
-      document.getElementById('dashContent').style.display = 'none';
-
-      enableWorkButtons(false);
-      enableEvalButtons(false);
-      document.getElementById('btnLogout').disabled = true;
-
-      document.getElementById('email').value = '';
-      document.getElementById('password').value = '';
-      setLoginMsg('warning', 'No has iniciado sesión.');
-
-      document.getElementById('evaluateeName').value = '';
-      document.getElementById('labName').value = '';
-      document.getElementById('evaluationDate').value = todayISO();
-
-      setStateBadge('No autenticado', 'text-bg-secondary');
-      clearWorkMsg();
-      switchToEvalTab();
-      setEvalLabel();
-      updateActionAvailability();
-    });
-
-    document.getElementById('btnRefresh').addEventListener('click', async () => {
-      const btn = document.getElementById('btnRefresh');
-      btn.disabled = true;
-      try{
-        await loadHistory();
-        workMsg('info', 'Histórico actualizado.');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    document.getElementById('btnApplyFilters').addEventListener('click', async () => {
-      await loadHistory();
-    });
-
-    /*************************************************************
-     * Data loading
-     *************************************************************/
-    async function loadQuestionBank() {
-      const { data, error } = await supabaseClient
-        .from('question_bank')
-        .select('question_id, block, section, question_text, is_critical')
-        .order('question_id', { ascending: true });
-
-      if (error) throw error;
-      questionBank = data || [];
+      document.getElementById('appRoot').classList.add('d-none');
+      document.getElementById('loginCard').classList.remove('d-none');
+      document.getElementById('btnLogout').classList.add('d-none');
+      document.getElementById('userBadge').textContent = 'No autenticado';
+      setLoginMsg('secondary','Sesión cerrada.');
     }
 
-    function statusBadge(status){
-      if (status === 'submitted') return '<span class="badge text-bg-success pill">Finalizada</span>';
-      if (status === 'locked') return '<span class="badge text-bg-dark pill">Bloqueada</span>';
-      return '<span class="badge text-bg-secondary pill">Borrador</span>';
-    }
+    // =============================
+    // DATA: Load question bank
+    // =============================
+    async function loadQuestionBank(){
+      workMsg('secondary','Cargando banco de preguntas…');
 
-    async function loadHistory() {
-      const name = document.getElementById('filterName').value.trim();
-      const from = document.getElementById('filterFrom').value;
-      const to = document.getElementById('filterTo').value;
-
-      let q = supabaseClient
-        .from('evaluations')
-        .select('evaluation_id, evaluation_date, evaluatee_full_name, lab_name, status')
-        .order('evaluation_date', { ascending: false });
-
-      if (from) q = q.gte('evaluation_date', from);
-      if (to) q = q.lte('evaluation_date', to);
-      if (name) q = q.ilike('evaluatee_full_name', `%${name}%`);
-
-      const { data, error } = await q;
-      const tbody = document.getElementById('tbodyHistory');
+      const { data, error } = await sb
+        .from('evaluation_questions')
+        .select('*')
+        .order('section', { ascending: true })
+        .order('display_order', { ascending: true });
 
       if (error) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-danger">Error: ${escapeHtml(error.message)}</td></tr>`;
+        workMsg('danger', 'Error cargando preguntas: ' + error.message);
         return;
       }
-      if (!data || !data.length) {
-        tbody.innerHTML = `<tr><td colspan="5" class="soft">No hay evaluaciones para ese filtro.</td></tr>`;
-        return;
+      questionBank = data || [];
+
+      // llenar select de secciones
+      const sel = document.getElementById('filterSection');
+      sel.innerHTML = `<option value="">Todas</option>`;
+      for (const sec of SECTION_ORDER) {
+        const opt = document.createElement('option');
+        opt.value = sec;
+        opt.textContent = sec;
+        sel.appendChild(opt);
       }
 
-      tbody.innerHTML = '';
-      for (const row of data) {
-        const canDelete = row.status === 'draft';
-        const canPdf = row.status === 'submitted';
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${escapeHtml(row.evaluation_date || '')}</td>
-          <td>${escapeHtml(row.evaluatee_full_name || '')}</td>
-          <td>${escapeHtml(row.lab_name || '')}</td>
-          <td>${statusBadge(row.status)}</td>
-          <td>
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-sm btn-outline-primary" data-open="${row.evaluation_id}">Abrir</button>
-              <button class="btn btn-sm btn-outline-secondary" data-pdf="${row.evaluation_id}" ${canPdf ? '' : 'disabled'}>PDF</button>
-              ${canDelete ? `<button class="btn btn-sm btn-outline-danger" data-del="${row.evaluation_id}">Eliminar</button>` : ``}
-            </div>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      }
-
-      tbody.querySelectorAll('button[data-open]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          await openEvaluation(btn.getAttribute('data-open'));
-          switchToEvalTab();
-        });
-      });
-
-      tbody.querySelectorAll('button[data-pdf]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-pdf');
-          await openEvaluation(id);
-          await renderDashboard();
-          switchToDashboardTab();
-          await downloadPDF(); // ya valida status
-        });
-      });
-
-      tbody.querySelectorAll('button[data-del]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          await deleteEvaluation(btn.getAttribute('data-del'));
-        });
-      });
+      workMsg('success','Banco de preguntas cargado.');
+      await loadOrCreateEvaluation();
+      await loadAnswers();
+      renderQuestions();
+      enableWorkButtons(true);
     }
 
-    /*************************************************************
-     * Create / Clear / Delete / Finalize
-     *************************************************************/
-    document.getElementById('btnNew').addEventListener('click', async () => {
-      try {
-        clearWorkMsg();
-        if (!questionBank.length) await loadQuestionBank();
+    // =============================
+    // DATA: Evaluation instance (draft)
+    // =============================
+    function todayISO(){
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    }
 
-        const evaluation_date = document.getElementById('evaluationDate').value || todayISO();
-        const evaluatee_full_name = document.getElementById('evaluateeName').value.trim();
-        const lab_name = document.getElementById('labName').value.trim();
-        if (!evaluatee_full_name) return workMsg('danger', 'Escribe el nombre del regente (evaluado).');
+    async function loadOrCreateEvaluation(){
+      // Seleccionar evaluación "draft" más reciente del usuario, o crear nueva
+      const { data, error } = await sb
+        .from('evaluations')
+        .select('*')
+        .eq('evaluator_user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-        const { data: userWrap } = await supabaseClient.auth.getUser();
-        const user = userWrap?.user;
-        if (!user) return workMsg('danger', 'No hay usuario autenticado.');
+      if (error) {
+        workMsg('danger','Error cargando evaluación: ' + error.message);
+        return;
+      }
 
-        let evaluator_full_name = user.email;
-        let evaluator_role = 'Evaluador';
-        let evaluator_org = '—';
-
-        const prof = await supabaseClient
-          .from('profiles')
-          .select('full_name, role, org')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!prof.error && prof.data) {
-          evaluator_full_name = prof.data.full_name || evaluator_full_name;
-          evaluator_role = prof.data.role || evaluator_role;
-          evaluator_org = prof.data.org || evaluator_org;
-        }
-
+      const last = data?.[0];
+      if (last && (last.status === 'draft' || last.status === 'submitted')) {
+        currentEval = last;
+      } else {
+        // crear (simple)
         const payload = {
-          owner_user_id: user.id,
-          evaluation_date,
-          status: 'draft',
-          evaluatee_full_name,
-          evaluatee_role: 'Regente/Director Técnico',
-          lab_name: lab_name || null,
-          evaluator_full_name,
-          evaluator_role,
-          evaluator_org,
-          declaration_ack: true
+          evaluation_date: todayISO(),
+          status: 'draft'
         };
 
-        const { data, error } = await supabaseClient
+        const { data: ins, error: e2 } = await sb
           .from('evaluations')
           .insert(payload)
-          .select('*')
+          .select()
           .single();
 
-        if (error) throw error;
-
-        currentEval = data;
-        currentResponsesMap = new Map();
-        lastDashboard = null;
-
-        setCurrentEvalUI();
-
-        for (const q of questionBank) ensureResponse(q.question_id);
-
-        renderQuestions();
-        enableEvalButtons(true);
-        updateActionAvailability();
-
-        workMsg('success', 'Evaluación creada (Borrador). Responde y guarda.');
-        await loadHistory();
-        switchToEvalTab();
-
-      } catch (e) {
-        workMsg('danger', 'No se pudo crear: ' + (e.message || e));
-      }
-    });
-
-    document.getElementById('btnClear').addEventListener('click', () => {
-      currentEval = null;
-      currentResponsesMap = new Map();
-      lastDashboard = null;
-
-      document.getElementById('evaluateeName').value = '';
-      document.getElementById('labName').value = '';
-      document.getElementById('evaluationDate').value = todayISO();
-      document.getElementById('questionsContainer').innerHTML = '<div class="col-12 soft">Crea una nueva evaluación o abre una del histórico.</div>';
-
-      document.getElementById('dashEmpty').style.display = 'block';
-      document.getElementById('dashContent').style.display = 'none';
-
-      document.getElementById('email').value = '';
-      document.getElementById('password').value = '';
-
-      enableEvalButtons(false);
-      setEvalLabel();
-      updateActionAvailability();
-      workMsg('info', 'Pantalla limpia.');
-      switchToEvalTab();
-    });
-
-    async function deleteEvaluation(evaluation_id){
-      try{
-        clearWorkMsg();
-
-        const { data: ev, error: evErr } = await supabaseClient
-          .from('evaluations')
-          .select('status')
-          .eq('evaluation_id', evaluation_id)
-          .single();
-
-        if (evErr) throw evErr;
-
-        if (ev.status !== 'draft'){
-          workMsg('warning', 'No se puede borrar: la evaluación ya está finalizada/bloqueada.');
+        if (e2) {
+          workMsg('danger','Error creando evaluación: ' + e2.message);
           return;
         }
-
-        const ok = confirm('¿Eliminar esta evaluación (borrador)? Esta acción no se puede deshacer.');
-        if (!ok) return;
-
-        const { error } = await supabaseClient
-          .from('evaluations')
-          .delete()
-          .eq('evaluation_id', evaluation_id);
-
-        if (error) throw error;
-
-        if (currentEval?.evaluation_id === evaluation_id){
-          currentEval = null;
-          currentResponsesMap = new Map();
-          lastDashboard = null;
-          document.getElementById('questionsContainer').innerHTML = '<div class="col-12 soft">Crea una nueva evaluación o abre una del histórico.</div>';
-          document.getElementById('dashEmpty').style.display = 'block';
-          document.getElementById('dashContent').style.display = 'none';
-          enableEvalButtons(false);
-          setEvalLabel();
-          updateActionAvailability();
-        }
-
-        workMsg('success', 'Evaluación borrada.');
-        await loadHistory();
-      } catch(e){
-        workMsg('danger', 'Error al borrar: ' + (e.message || e));
+        currentEval = ins;
       }
+
+      updateEvalMeta();
+      setStatusBadge(currentEval.status);
     }
 
-    document.getElementById('btnFinalize').addEventListener('click', async () => {
-      try{
-        if (!currentEval?.evaluation_id) return workMsg('warning','No hay evaluación abierta.');
-        if (currentEval.status !== 'draft') return workMsg('warning','Esta evaluación ya está finalizada/bloqueada.');
-
-        const ok = confirm('¿Finalizar evaluación? Luego ya no podrá borrarse y se habilitará el PDF.');
-        if (!ok) return;
-
-        const { data, error } = await supabaseClient
-          .from('evaluations')
-          .update({ status:'submitted', submitted_at: new Date().toISOString() })
-          .eq('evaluation_id', currentEval.evaluation_id)
-          .select('*')
-          .single();
-
-        if (error) throw error;
-
-        currentEval = data;
-        workMsg('success','Evaluación finalizada.');
-        await loadHistory();
-
-        enableEvalButtons(false); // bloquear edición
-        updateActionAvailability();
-
-        renderQuestions(); // re-render read-only
-
-      } catch(e){
-        workMsg('danger','Error al finalizar: ' + (e.message || e));
-      }
-    });
-
-    /*************************************************************
-     * Open evaluation (carga BD -> mapa)
-     *************************************************************/
-    async function openEvaluation(evaluation_id) {
-      try {
-        clearWorkMsg();
-
-        const { data: ev, error: evErr } = await supabaseClient
-          .from('evaluations')
-          .select('*')
-          .eq('evaluation_id', evaluation_id)
-          .single();
-        if (evErr) throw evErr;
-
-        const { data: rows, error: rErr } = await supabaseClient
-          .from('evaluation_responses')
-          .select('question_id, score, is_ne, evidence_text')
-          .eq('evaluation_id', evaluation_id);
-        if (rErr) throw rErr;
-
-        currentEval = ev;
-        lastDashboard = null;
-
-        currentResponsesMap = new Map();
-        for (const r of (rows || [])) {
-          currentResponsesMap.set(r.question_id, {
-            question_id: r.question_id,
-            score: (typeof r.score === 'number') ? r.score : null,
-            is_ne: r.is_ne === true,
-            evidence_text: r.evidence_text || ''
-          });
-        }
-        for (const q of questionBank) ensureResponse(q.question_id);
-
-        setCurrentEvalUI();
-        renderQuestions();
-
-        if (currentEval.status === 'draft'){
-          enableEvalButtons(true);
-        } else {
-          enableEvalButtons(false);
-        }
-        updateActionAvailability();
-
-        await renderDashboard();
-        workMsg('info', 'Evaluación cargada. Estado: ' + (currentEval.status === 'draft' ? 'Borrador' : 'Finalizada'));
-      } catch (e) {
-        workMsg('danger', 'No se pudo abrir: ' + (e.message || e));
-      }
+    function updateEvalMeta(){
+      const el = document.getElementById('evalMeta');
+      const name = currentEval?.evaluatee_full_name || '—';
+      const date = currentEval?.evaluation_date || '—';
+      const lab  = currentEval?.lab_name || '—';
+      el.innerHTML = `<b>${escapeHtml(name)}</b><br><span class="soft">Fecha:</span> ${escapeHtml(date)}<br><span class="soft">Lab:</span> ${escapeHtml(lab)}`;
     }
 
-    /*************************************************************
-     * Render Questions + Scroll fix
-     *************************************************************/
-    function sectionTitle(sec) {
-      return SECTION_TITLES[sec] ? `${sec} — ${SECTION_TITLES[sec]}` : `Sección ${sec}`;
-    }
+    // =============================
+    // DATA: Answers
+    // =============================
+    async function loadAnswers(){
+      if (!currentEval?.evaluation_id && !currentEval?.id) return;
 
-    window.toggleHelp = function(qid){
-      const el = document.getElementById(`help_${qid}`);
-      if (!el) return;
-      el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
-    };
+      const evalId = currentEval.evaluation_id || currentEval.id;
 
-    function openSectionAndScroll(sec){
-      const collapseEl = document.getElementById(`collapse_${sec}`);
-      const headerEl = document.getElementById(`acc_${sec}`);
-      if (!collapseEl || !headerEl) return;
+      const { data, error } = await sb
+        .from('evaluation_answers')
+        .select('*')
+        .eq('evaluation_id', evalId);
 
-      const c = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
-      c.show();
-
-      const handler = () => {
-        collapseEl.removeEventListener('shown.bs.collapse', handler);
-        const firstQ = collapseEl.querySelector('[data-firstq="1"]');
-        const target = firstQ || headerEl;
-        const headerHeight = document.getElementById('appHeader')?.offsetHeight || 80;
-        scrollToWithOffset(target, headerHeight + 12);
-      };
-      collapseEl.addEventListener('shown.bs.collapse', handler);
-    }
-
-    function renderQuestions() {
-      const container = document.getElementById('questionsContainer');
-
-      if (!currentEval?.evaluation_id) {
-        container.innerHTML = '<div class="col-12 soft">Crea una nueva evaluación o abre una del histórico.</div>';
-        return;
-      }
-      if (!questionBank.length) {
-        container.innerHTML = '<div class="col-12 soft">No hay preguntas cargadas. Revisa question_bank.</div>';
+      if (error) {
+        workMsg('danger', 'Error cargando respuestas: ' + error.message);
         return;
       }
 
-      const sections = {};
-      for (const q of questionBank) {
-        if (!sections[q.section]) sections[q.section] = [];
-        sections[q.section].push(q);
+      answersMap = new Map();
+      for (const r of (data || [])){
+        answersMap.set(r.question_id, { score: r.score, evidence: r.evidence || '' });
       }
 
-      const ordered = SECTION_ORDER.filter(s => sections[s] && sections[s].length);
+      workMsg('success', 'Respuestas cargadas.');
+    }
 
-      container.innerHTML = `
-        <div class="col-lg-3">
-          <div class="card">
-            <div class="card-header fw-semibold">Secciones</div>
-            <div class="list-group list-group-flush" id="sectionNav"></div>
-          </div>
-          <div class="small soft mt-2">
-            Tip: responde por sección. N/E se excluye del cálculo.
-          </div>
-        </div>
-
-        <div class="col-lg-9">
-          <div class="accordion" id="sectionsAccordion"></div>
-        </div>
-      `;
-
-      const nav = document.getElementById('sectionNav');
-      const acc = document.getElementById('sectionsAccordion');
-
-      const calcSectionProgress = (sec) => {
-        const list = sections[sec] || [];
-        let answered = 0;
-        for (const q of list) {
-          const r = ensureResponse(q.question_id);
-          if (r.is_ne) { answered++; continue; }
-          if (typeof r.score === 'number') answered++;
-        }
-        return `${answered}/${list.length}`;
+    async function saveAnswer(question_id, score, evidence){
+      const evalId = currentEval.evaluation_id || currentEval.id;
+      const payload = {
+        evaluation_id: evalId,
+        question_id,
+        score,
+        evidence: evidence || null
       };
 
-      function refreshSectionBadges() {
-        ordered.forEach(sec => {
-          const prog = calcSectionProgress(sec);
-          const badge = document.getElementById(`badge_${sec}`);
-          const p = document.getElementById(`progress_${sec}`);
-          if (badge) badge.textContent = prog;
-          if (p) p.textContent = prog;
-        });
+      const { error } = await sb
+        .from('evaluation_answers')
+        .upsert(payload, { onConflict: 'evaluation_id,question_id' });
+
+      if (error) {
+        workMsg('danger','No se pudo guardar respuesta: ' + error.message);
+        return false;
+      }
+      answersMap.set(question_id, { score, evidence: evidence || '' });
+      return true;
+    }
+
+    // =============================
+    // RENDER: Questions
+    // =============================
+    function scoreClass(score){
+      if (score === null || score === undefined) return 'score-ne';
+      if (score === 5) return 'score-5';
+      if (score === 4) return 'score-4';
+      if (score === 3) return 'score-3';
+      if (score === 2) return 'score-2';
+      if (score === 1) return 'score-1';
+      return 'score-ne';
+    }
+
+    function renderQuestions(){
+      const list = document.getElementById('questionList');
+      list.innerHTML = '';
+
+      const secFilter = document.getElementById('filterSection').value;
+      const textFilter = document.getElementById('filterText').value.trim().toLowerCase();
+
+      let items = questionBank.slice();
+      if (secFilter) items = items.filter(q => q.section === secFilter);
+      if (textFilter) items = items.filter(q => (q.question_text || '').toLowerCase().includes(textFilter));
+
+      if (!items.length){
+        list.innerHTML = `<div class="soft">No hay preguntas con esos filtros.</div>`;
+        return;
       }
 
-      ordered.forEach((sec, idx) => {
-        const navItem = document.createElement('button');
-        navItem.type = 'button';
-        navItem.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-        navItem.innerHTML = `
-          <span class="fw-semibold">${sec}</span>
-          <span class="badge text-bg-light pill mono" id="badge_${sec}">0/0</span>
-        `;
-        navItem.addEventListener('click', () => openSectionAndScroll(sec));
-        nav.appendChild(navItem);
+      for (const q of items){
+        const ans = answersMap.get(q.question_id) || { score: null, evidence: '' };
+        const card = document.createElement('div');
+        card.className = 'question-card';
 
-        const expanded = idx === 0 ? 'true' : 'false';
-        const show = idx === 0 ? 'show' : '';
+        card.innerHTML = `
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+              <div class="fw-semibold">#${q.question_id}. ${escapeHtml(q.question_text || '')}</div>
+              <div class="q-meta">${escapeHtml(q.section || '')} • Peso sección: <span class="mono">${SECTION_WEIGHTS[q.section] || 0}%</span></div>
+            </div>
+            <div class="score-pill ${scoreClass(ans.score)}">${ans.score ?? 'N/E'}</div>
+          </div>
 
-        const item = document.createElement('div');
-        item.className = 'accordion-item';
-        item.id = `acc_${sec}`;
-        item.innerHTML = `
-          <h2 class="accordion-header">
-            <button class="accordion-button ${idx === 0 ? '' : 'collapsed'}" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#collapse_${sec}"
-                    aria-expanded="${expanded}" aria-controls="collapse_${sec}">
-              <div class="d-flex w-100 justify-content-between align-items-center pe-2">
-                <div class="fw-semibold">${escapeHtml(sectionTitle(sec))}</div>
-                <div class="small soft">Progreso: <span class="mono" id="progress_${sec}">—</span></div>
-              </div>
+          <div class="divider"></div>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label small">Calificación (1–5)</label>
+              <select class="form-select scoreSel">
+                <option value="">No evaluado</option>
+                <option value="5">5 - Excelente</option>
+                <option value="4">4 - Muy bueno</option>
+                <option value="3">3 - Bueno</option>
+                <option value="2">2 - Regular</option>
+                <option value="1">1 - Deficiente</option>
+              </select>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label small">Evidencia / Observación (opcional)</label>
+              <input class="form-control evInput" placeholder="Describe evidencia, hallazgo o comentario…" />
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end mt-2">
+            <button class="btn btn-sm btn-outline-primary btnSave">
+              <i class="bi bi-check2"></i> Guardar
             </button>
-          </h2>
-          <div id="collapse_${sec}" class="accordion-collapse collapse ${show}" data-bs-parent="#sectionsAccordion">
-            <div class="accordion-body vstack gap-3" id="body_${sec}"></div>
           </div>
         `;
-        acc.appendChild(item);
 
-        const body = document.getElementById(`body_${sec}`);
-        const collapseEl = document.getElementById(`collapse_${sec}`);
+        const sel = card.querySelector('.scoreSel');
+        if (ans.score) sel.value = String(ans.score);
+        const ev = card.querySelector('.evInput');
+        ev.value = ans.evidence || '';
 
-        collapseEl.addEventListener('shown.bs.collapse', () => {
-          const first = collapseEl.querySelector('[data-firstq="1"]');
-          if (!first) return;
-          const headerHeight = document.getElementById('appHeader')?.offsetHeight || 80;
-          scrollToWithOffset(first, headerHeight + 12);
-        });
-
-        (sections[sec] || []).forEach((q, idxQ) => {
-          const qid = q.question_id;
-          const r = ensureResponse(qid);
-
-          const criticalBadge = q.is_critical ? `<span class="badge text-bg-danger pill ms-1">Crítica</span>` : '';
-          const helpText = HELP[qid] || "";
-          const helpBtn = helpText
-            ? `<button type="button" class="btn btn-sm btn-outline-secondary ms-2 pill" style="padding:2px 10px;" onclick="toggleHelp(${qid})">?</button>`
-            : "";
-
-          const block = document.createElement('div');
-          block.className = 'question-card';
-          if (idxQ === 0) block.setAttribute('data-firstq', '1');
-
-          block.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start gap-2">
-              <div>
-                <div class="fw-semibold">
-                  #${qid}
-                  <span class="badge text-bg-light pill">${q.block}-${q.section}</span>
-                  ${criticalBadge}
-                  ${helpBtn}
-                </div>
-                <div class="mt-1">${escapeHtml(q.question_text)}</div>
-                ${helpText ? `
-                  <div id="help_${qid}" class="help-box mt-2" style="display:none;">
-                    <b>Contexto:</b> ${escapeHtml(helpText)}
-                  </div>` : `<div id="help_${qid}" style="display:none;"></div>`
-                }
-              </div>
-            </div>
-
-            <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
-              ${[1,2,3,4,5].map(n => `
-                <input type="radio" class="btn-check" name="score_${qid}" id="score_${qid}_${n}" value="${n}">
-                <label class="btn btn-outline-primary btn-sm" for="score_${qid}_${n}">${n}</label>
-              `).join('')}
-
-              <div class="ms-2 form-check">
-                <input class="form-check-input" type="checkbox" id="ne_${qid}">
-                <label class="form-check-label" for="ne_${qid}">N/E</label>
-              </div>
-            </div>
-
-            <div class="mt-2">
-              <label class="form-label mb-1">Evidencia / Observación</label>
-              <textarea id="evidence_${qid}" class="form-control" rows="2"
-                placeholder="Evidencia breve (recomendado si 1–2)."></textarea>
-            </div>
-
-            <div class="q-meta mt-2">N/E = No evaluable / No aplica. Se excluye del cálculo.</div>
-          `;
-          body.appendChild(block);
-
-          const neEl = block.querySelector(`#ne_${qid}`);
-          const evEl = block.querySelector(`#evidence_${qid}`);
-          const radios = block.querySelectorAll(`input[name="score_${qid}"]`);
-
-          // apply from map
-          evEl.value = r.evidence_text || '';
-          if (r.is_ne) {
-            neEl.checked = true;
-            radios.forEach(rr => { rr.checked = false; rr.disabled = true; });
-          } else if (typeof r.score === 'number') {
-            const rr = block.querySelector(`#score_${qid}_${r.score}`);
-            if (rr) rr.checked = true;
-          }
-
-          const isReadOnly = currentEval.status !== 'draft';
-          if (isReadOnly){
-            neEl.disabled = true;
-            radios.forEach(rr => rr.disabled = true);
-            evEl.disabled = true;
-          } else {
-            neEl.addEventListener('change', () => {
-              if (neEl.checked) {
-                radios.forEach(rr => { rr.checked = false; rr.disabled = true; });
-                setResponse(qid, { is_ne: true, score: null });
-              } else {
-                radios.forEach(rr => { rr.disabled = false; });
-                setResponse(qid, { is_ne: false });
-              }
-              refreshSectionBadges();
-            });
-
-            radios.forEach(rr => {
-              rr.addEventListener('change', () => {
-                if (!rr.checked) return;
-                neEl.checked = false;
-                setResponse(qid, { is_ne: false, score: Number(rr.value) });
-                refreshSectionBadges();
-              });
-            });
-
-            let t = null;
-            evEl.addEventListener('input', () => {
-              clearTimeout(t);
-              t = setTimeout(() => {
-                setResponse(qid, { evidence_text: evEl.value.trim() });
-              }, 250);
-            });
+        card.querySelector('.btnSave').addEventListener('click', async () => {
+          const val = sel.value ? Number(sel.value) : null;
+          const evidence = ev.value || '';
+          const ok = await saveAnswer(q.question_id, val, evidence);
+          if (ok){
+            workMsg('success', `Respuesta guardada (#${q.question_id}).`);
+            renderQuestions();
+            await renderDashboard();
           }
         });
-      });
 
-      refreshSectionBadges();
+        list.appendChild(card);
+      }
     }
 
-    /*************************************************************
-     * Save responses (usa MAPA)
-     *************************************************************/
-    async function saveResponses() {
-      if (!currentEval?.evaluation_id) return workMsg('danger','Primero crea o abre una evaluación.');
-      if (currentEval.status !== 'draft') return workMsg('warning','La evaluación está finalizada; no se puede editar.');
+    // =============================
+    // DASHBOARD
+    // =============================
+    function computeDashboard(){
+      const total = questionBank.length;
+      let answered = 0;
 
-      const rows = snapshotRows().map(r => ({
-        evaluation_id: currentEval.evaluation_id,
-        question_id: r.question_id,
-        score: (typeof r.score === 'number') ? r.score : null,
-        is_ne: r.is_ne === true,
-        evidence_text: r.evidence_text || ''
-      }));
+      const sectionSum = {};
+      const sectionCnt = {};
+      for (const sec of SECTION_ORDER){ sectionSum[sec]=0; sectionCnt[sec]=0; }
 
-      const { error } = await supabaseClient
-        .from('evaluation_responses')
-        .upsert(rows, { onConflict: 'evaluation_id,question_id' });
+      const rows = [];
+      for (const q of questionBank){
+        const ans = answersMap.get(q.question_id) || { score: null, evidence: '' };
+        const score = (ans.score === null || ans.score === undefined || ans.score === '') ? null : Number(ans.score);
+        const evidence = (ans.evidence || '').trim();
 
-      if (error) throw error;
-
-      lastDashboard = null;
-      workMsg('success','Respuestas guardadas.');
-      await renderDashboard();
-      await loadHistory();
-    }
-
-    document.getElementById('btnSave').addEventListener('click', async () => {
-      try { await saveResponses(); } catch (e) { workMsg('danger','Error guardando: ' + (e.message || e)); }
-    });
-    document.getElementById('btnSaveSmall').addEventListener('click', async () => {
-      try { await saveResponses(); } catch (e) { workMsg('danger','Error guardando: ' + (e.message || e)); }
-    });
-
-    /*************************************************************
-     * Dashboard (usa MAPA)
-     *************************************************************/
-    function computeDashboard(rows) {
-      const byQ = new Map(rows.map(r => [r.question_id, r]));
-
-      const sectionStats = {};
-      let neCount = 0;
-      let criticalLow = [];
-
-      for (const q of questionBank) {
-        const r = byQ.get(q.question_id) || { score:null, is_ne:false, evidence_text:'' };
-        const sec = q.section;
-
-        if (!sectionStats[sec]) sectionStats[sec] = { sum:0, n:0 };
-
-        if (r.is_ne === true) { neCount++; continue; }
-
-        const score = (typeof r.score === 'number') ? r.score : null;
-        if (score === null) continue;
-
-        sectionStats[sec].sum += score;
-        sectionStats[sec].n += 1;
-
-        if (q.is_critical && score <= 2) {
-          criticalLow.push({
-            question_id: q.question_id,
-            section: q.section,
-            text: q.question_text,
-            score,
-            evidence_text: r.evidence_text || ''
-          });
+        if (score !== null) {
+          answered++;
+          sectionSum[q.section] += score;
+          sectionCnt[q.section] += 1;
         }
+
+        rows.push({
+          question_id: q.question_id,
+          section: q.section,
+          text: q.question_text,
+          score,
+          evidence
+        });
       }
 
       const sectionAvg = {};
-      for (const sec of Object.keys(SECTION_WEIGHTS)) {
-        const s = sectionStats[sec];
-        sectionAvg[sec] = (s && s.n > 0) ? (s.sum / s.n) : null;
+      for (const sec of SECTION_ORDER){
+        sectionAvg[sec] = sectionCnt[sec] ? sectionSum[sec]/sectionCnt[sec] : null;
       }
 
-      let wSum = 0, wMax = 0;
-      for (const sec of Object.keys(SECTION_WEIGHTS)) {
+      let weighted = 0;
+      for (const sec of SECTION_ORDER){
+        const w = SECTION_WEIGHTS[sec] || 0;
         const avg = sectionAvg[sec];
-        const w = SECTION_WEIGHTS[sec];
-        if (avg === null) continue;
-        wSum += (avg / 5) * w;
-        wMax += w;
+        const pct = (avg === null) ? 0 : (avg/5)*100;
+        weighted += (pct * w/100);
       }
-      const totalPct = (wMax > 0) ? (wSum / wMax) * 100 : 0;
-      const total5 = totalPct / 20;
+      const score100 = Math.round(weighted * 10) / 10;
+      const qual = QUAL_LABEL(score100);
 
-      const qual = qualitativeLabel(totalPct);
+      const criticalLow = rows.filter(r => r.score !== null && r.score <= 2);
+      const obsEvidence = rows.filter(r => (r.evidence || '').trim().length > 0);
 
-      return { sectionAvg, totalPct, total5, neCount, criticalLow, qual };
+      return { total, answered, score100, qual, sectionAvg, criticalLow, obsEvidence, rows };
     }
 
-    async function renderDashboard() {
-      if (!currentEval?.evaluation_id) return;
+    async function renderDashboard(){
+      if (!questionBank.length) return;
+      const dash = computeDashboard();
+      lastDashboard = { dash, rows: dash.rows };
 
-      const rows = snapshotRows();
-      const dash = computeDashboard(rows);
-      lastDashboard = { dash, rows };
+      document.getElementById('kpiScore').textContent = dash.score100.toFixed(1);
+      document.getElementById('kpiQual').textContent = `${dash.qual.label} — ${dash.qual.msg}`;
+      document.getElementById('kpiAnswered').textContent = dash.answered;
+      document.getElementById('kpiTotal').textContent = dash.total;
+      document.getElementById('kpiCritical').textContent = dash.criticalLow.length;
 
-      document.getElementById('dashEmpty').style.display = 'none';
-      document.getElementById('dashContent').style.display = 'block';
+      document.getElementById('dashEvaluatee').textContent = currentEval?.evaluatee_full_name || '—';
+      document.getElementById('dashDate').textContent = currentEval?.evaluation_date || '—';
+      document.getElementById('dashLab').textContent = currentEval?.lab_name || '—';
 
-      document.getElementById('kpiTotalPct').textContent = dash.totalPct.toFixed(1);
-      document.getElementById('kpiTotal5').textContent = dash.total5.toFixed(2);
-      document.getElementById('kpiCritical').textContent = String(dash.criticalLow.length);
-      document.getElementById('kpiNE').textContent = String(dash.neCount);
+      // Firma
+      document.getElementById('sigName').textContent = currentEval?.evaluator_full_name || (currentUser?.email || '—');
+      document.getElementById('sigRole').textContent = currentEval?.evaluator_role || 'Evaluador';
+      document.getElementById('sigDate').textContent = `Fecha: ${currentEval?.evaluation_date || todayISO()}`;
 
-      document.getElementById('kpiQualTag').textContent = dash.qual.tag;
-      document.getElementById('kpiQualMsg').textContent = dash.qual.msg;
-
+      // Secciones
       const bars = document.getElementById('sectionBars');
       bars.innerHTML = '';
-      for (const sec of SECTION_ORDER) {
+      for (const sec of SECTION_ORDER){
         const avg = dash.sectionAvg[sec];
         const w = SECTION_WEIGHTS[sec];
-        const pct = (avg === null) ? 0 : (avg / 5) * 100;
-
+        const pct = (avg === null) ? 0 : (avg/5)*100;
         const row = document.createElement('div');
         row.innerHTML = `
           <div class="d-flex justify-content-between">
-            <div class="fw-semibold">${sec} <span class="badge text-bg-light pill ms-1">${w}%</span></div>
+            <div class="fw-semibold">${escapeHtml(sec)} <span class="badge text-bg-light pill ms-1">${w}%</span></div>
             <div class="mono">${avg === null ? 'N/E' : avg.toFixed(2)}</div>
           </div>
           <div class="progress" style="height: 10px;">
@@ -1433,54 +894,108 @@
         bars.appendChild(row);
       }
 
-      const cl = document.getElementById('criticalList');
-      cl.innerHTML = '';
-      if (!dash.criticalLow.length) {
-        cl.innerHTML = `<div class="soft">Sin alertas críticas (≤2).</div>`;
+      // Observaciones
+      const obs = document.getElementById('obsList');
+      obs.innerHTML = '';
+      const items = [];
+      for (const c of dash.criticalLow){
+        items.push({ kind:'Crítica', ...c });
+      }
+      for (const e of dash.obsEvidence){
+        items.push({ kind:'Evidencia', ...e });
+      }
+
+      if (!items.length){
+        obs.innerHTML = `<div class="soft">Sin observaciones registradas.</div>`;
       } else {
-        for (const c of dash.criticalLow) {
-          const item = document.createElement('div');
-          item.className = 'p-2 bg-white border rounded';
-          item.innerHTML = `
+        for (const it of items.slice(0,40)){
+          const box = document.createElement('div');
+          box.className = 'p-2 bg-white border rounded';
+          box.innerHTML = `
             <div class="d-flex justify-content-between">
-              <div class="fw-semibold">#${c.question_id} (${c.section})</div>
-              <span class="badge text-bg-danger pill">Score ${c.score}</span>
+              <div class="fw-semibold">#${it.question_id} (${escapeHtml(it.section)}) <span class="badge text-bg-light pill ms-1">${escapeHtml(it.kind)}</span></div>
+              <div class="mono">${it.score ?? '—'}</div>
             </div>
-            <div class="small">${escapeHtml(c.text)}</div>
-            ${c.evidence_text ? `<div class="small soft mt-1"><b>Evidencia:</b> ${escapeHtml(c.evidence_text)}</div>` : `<div class="small soft mt-1"><b>Evidencia:</b> (vacía)</div>`}
+            <div class="small">${escapeHtml(it.text)}</div>
+            <div class="small soft mt-1"><b>Evidencia:</b> ${escapeHtml(it.evidence || '(vacía)')}</div>
           `;
-          cl.appendChild(item);
+          obs.appendChild(box);
         }
       }
 
-      updateActionAvailability();
+      // habilitar PDF en dash si finalizada
+      const allowPDF = (currentEval?.status === 'submitted');
+      document.getElementById('btnPDFDash').disabled = !allowPDF;
     }
 
-    document.getElementById('btnDashRefresh').addEventListener('click', async () => {
-      await renderDashboard();
-      workMsg('info','Dashboard actualizado.');
-    });
+    // =============================
+    // SUBMIT / DRAFT
+    // =============================
+    async function setEvaluationStatus(status){
+      const evalId = currentEval.evaluation_id || currentEval.id;
+      const { data, error } = await sb
+        .from('evaluations')
+        .update({ status })
+        .eq('evaluation_id', evalId)
+        .select()
+        .single();
 
-    document.getElementById('btnDashboard').addEventListener('click', async () => {
-      await renderDashboard();
-      switchToDashboardTab();
-      workMsg('info','Dashboard actualizado.');
-    });
+      if (error){
+        workMsg('danger','No se pudo actualizar estado: ' + error.message);
+        return false;
+      }
+      currentEval = data;
+      setStatusBadge(currentEval.status);
+      updateEvalMeta();
+      enableWorkButtons(true);
+      return true;
+    }
 
-    /*************************************************************
-     * PDF (SOLO submitted)
-     *************************************************************/
-    document.getElementById('btnPdfHere').addEventListener('click', async () => {
-      await renderDashboard();
-      await downloadPDF();
-    });
+    // =============================
+    // HISTORY
+    // =============================
+    async function loadHistory(){
+      const list = document.getElementById('historyList');
+      list.innerHTML = '<div class="soft">Cargando…</div>';
 
-    document.getElementById('btnPDF').addEventListener('click', async () => {
-      await renderDashboard();
-      switchToDashboardTab();
-      await downloadPDF();
-    });
+      const { data, error } = await sb
+        .from('evaluations')
+        .select('*')
+        .eq('evaluator_user_id', currentUser.id)
+        .eq('status','submitted')
+        .order('created_at', { ascending:false })
+        .limit(50);
 
+      if (error){
+        list.innerHTML = `<div class="text-danger small">Error: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+
+      if (!data?.length){
+        list.innerHTML = `<div class="soft">Sin evaluaciones finalizadas.</div>`;
+        return;
+      }
+
+      list.innerHTML = '';
+      for (const e of data){
+        const row = document.createElement('div');
+        row.className = 'p-2 bg-white border rounded';
+        row.innerHTML = `
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold">${escapeHtml(e.evaluatee_full_name || '—')}</div>
+              <div class="small soft">${escapeHtml(e.lab_name || '—')} • ${escapeHtml(e.evaluation_date || '—')}</div>
+            </div>
+            <span class="badge text-bg-success pill">Finalizada</span>
+          </div>
+        `;
+        list.appendChild(row);
+      }
+    }
+
+    // =============================
+    // PDF
+    // =============================
     async function downloadPDF() {
       if (!currentEval?.evaluation_id) return workMsg('danger','No hay evaluación abierta.');
       if (currentEval.status !== 'submitted') {
@@ -1497,15 +1012,19 @@
 
       // Evaluador (snapshot desde evaluations)
       const evName = currentEval.evaluator_full_name || '—';
-      const evRole = currentEval.evaluator_role || '';
-      const evOrg  = currentEval.evaluator_org || '';
-      document.getElementById('pdfEvaluatorName').textContent = evName;
-      document.getElementById('pdfEvaluatorMeta').textContent = [evRole, evOrg].filter(Boolean).join(' — ') || ' ';
+      const evRole = currentEval.evaluator_role || 'Evaluador';
+      const evDate = currentEval.evaluation_date || todayISO();
 
-      document.getElementById('pdfTotalPct').textContent = dash.totalPct.toFixed(1);
-      document.getElementById('pdfTotal5').textContent = dash.total5.toFixed(2);
-      document.getElementById('pdfQualTag').textContent = dash.qual.tag;
-      document.getElementById('pdfQualMsg').textContent = dash.qual.msg;
+      document.getElementById('pdfSigName').textContent = evName;
+      document.getElementById('pdfSigRole').textContent = evRole;
+      document.getElementById('pdfSigDate').textContent = `Fecha: ${evDate}`;
+
+      // KPIs
+      document.getElementById('pdfScore').textContent = dash.score100.toFixed(1);
+      document.getElementById('pdfQual').textContent = dash.qual.label;
+      document.getElementById('pdfAnswered').textContent = dash.answered;
+      document.getElementById('pdfTotal').textContent = dash.total;
+      document.getElementById('pdfCritical').textContent = dash.criticalLow.length;
 
       const pdfBars = document.getElementById('pdfSectionBars');
       pdfBars.innerHTML = '';
@@ -1535,29 +1054,24 @@
 
       for (const c of dash.criticalLow) {
         obsItems.push({
-          kind: 'Crítico ≤2',
+          kind: 'Crítica',
           question_id: c.question_id,
           section: c.section,
           score: c.score,
           text: c.text,
-          evidence: c.evidence_text || ''
+          evidence: c.evidence
         });
       }
-
-      for (const q of questionBank) {
-        const r = byQ.get(q.question_id);
+      for (const e of dash.obsEvidence) {
+        const r = byQ.get(e.question_id);
         if (!r) continue;
-        const ev = (r.evidence_text || '').trim();
-        if (!ev) continue;
-        if (obsItems.some(x => x.question_id === q.question_id)) continue;
-
         obsItems.push({
-          kind: 'Observación',
-          question_id: q.question_id,
-          section: q.section,
-          score: r.is_ne ? 'N/E' : (typeof r.score === 'number' ? r.score : '—'),
-          text: q.question_text,
-          evidence: ev
+          kind: 'Evidencia',
+          question_id: r.question_id,
+          section: r.section,
+          score: r.score ?? '—',
+          text: r.text,
+          evidence: r.evidence
         });
       }
 
@@ -1566,7 +1080,7 @@
       } else {
         for (const it of obsItems.slice(0, 40)) {
           const box = document.createElement('div');
-          box.className = 'p-2 bg-white border rounded';
+          box.className = 'p-2 bg-white border rounded avoid-break';
           box.innerHTML = `
             <div class="d-flex justify-content-between">
               <div class="fw-semibold">#${it.question_id} (${it.section}) <span class="badge text-bg-light pill ms-1">${escapeHtml(it.kind)}</span></div>
@@ -1580,43 +1094,139 @@
       }
 
       const filename = `Evaluacion_Regente_${(currentEval.evaluatee_full_name || 'Regente').replaceAll(' ', '_')}_${currentEval.evaluation_date || todayISO()}.pdf`;
+
+      // ---- FIX PDF: render estable (evita página 1 en blanco / offsets) ----
+      const pdfEl = document.getElementById('pdfReport');
+
+      workMsg('info', 'Generando PDF...');
+
+      document.body.classList.add('is-exporting'); // activa estilos de exportación
+      window.scrollTo(0, 0);
+
+      // Espera 1 frame para que el navegador aplique layout/estilos
+      await new Promise(r => requestAnimationFrame(r));
+
       const opt = {
-        margin: [10, 10, 10, 10],
+        margin: [10, 10, 10, 10], // mm
         filename,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true },
+        image: { type: 'jpeg', quality: 0.98 },
+        pagebreak: { mode: ['css', 'legacy'] },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          scrollY: 0,
+          scrollX: 0,
+          backgroundColor: '#ffffff'
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
-      workMsg('info', 'Generando PDF...');
-      await html2pdf().set(opt).from(document.getElementById('pdfReport')).save();
-      workMsg('success', 'PDF descargado.');
+      try {
+        await html2pdf().set(opt).from(pdfEl).save();
+        workMsg('success', 'PDF descargado.');
+      } finally {
+        document.body.classList.remove('is-exporting');
+      }
     }
 
-    /*************************************************************
-     * Sticky save
-     *************************************************************/
-    document.getElementById('btnSaveSmall').addEventListener('click', async () => {
-      try { await saveResponses(); } catch (e) { workMsg('danger','Error guardando: ' + (e.message || e)); }
+    // =============================
+    // EVENTS
+    // =============================
+    document.getElementById('btnApplyFilters').addEventListener('click', () => renderQuestions());
+
+    document.getElementById('btnRefreshDash').addEventListener('click', async () => {
+      await renderDashboard();
+      workMsg('success','Resumen actualizado.');
     });
 
-    /*************************************************************
-     * Init
-     *************************************************************/
-    enableWorkButtons(false);
-    enableEvalButtons(false);
-    updateActionAvailability();
-    setEvalLabel();
+    document.getElementById('btnReloadHistory').addEventListener('click', async () => {
+      await loadHistory();
+    });
 
-    /*************************************************************
-     * Auto-session restore (si existe sesión)
-     *************************************************************/
+    document.getElementById('btnDraft').addEventListener('click', async () => {
+      const ok = await setEvaluationStatus('draft');
+      if (ok) workMsg('success','Borrador guardado.');
+    });
+
+    document.getElementById('btnDraft2').addEventListener('click', async () => {
+      const ok = await setEvaluationStatus('draft');
+      if (ok) workMsg('success','Borrador guardado.');
+    });
+
+    document.getElementById('btnSubmit').addEventListener('click', async () => {
+      const ok = await setEvaluationStatus('submitted');
+      if (ok) workMsg('success','Evaluación finalizada.');
+      await renderDashboard();
+    });
+
+    document.getElementById('btnSubmit2').addEventListener('click', async () => {
+      const ok = await setEvaluationStatus('submitted');
+      if (ok) workMsg('success','Evaluación finalizada.');
+      await renderDashboard();
+    });
+
+    document.getElementById('btnPDFHere').addEventListener('click', async () => {
+      await renderDashboard();
+      await downloadPDF();
+    });
+
+    document.getElementById('btnPDF').addEventListener('click', async () => {
+      await renderDashboard();
+      switchToDashboardTab();
+      await downloadPDF();
+    });
+
+    document.getElementById('btnPDFDash').addEventListener('click', async () => {
+      await renderDashboard();
+      await downloadPDF();
+    });
+
+    document.getElementById('btnLogout').addEventListener('click', logout);
+
+    // Tabs
+    for (const btn of document.querySelectorAll('#mainTabs .nav-link')){
+      btn.addEventListener('click', async () => {
+        switchTab(btn.dataset.tab);
+        if (btn.dataset.tab === 'tabDash') await renderDashboard();
+        if (btn.dataset.tab === 'tabHistory') await loadHistory();
+      });
+    }
+
+    // Login
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+      const email = document.getElementById('loginEmail').value.trim();
+      const pass = document.getElementById('loginPass').value;
+      if (!email || !pass) return setLoginMsg('warning','Ingresa correo y contraseña.');
+
+      const u = await login(email, pass);
+      if (!u) return;
+
+      currentUser = u;
+      document.getElementById('userBadge').textContent = (u.email || 'Usuario');
+      document.getElementById('btnLogout').classList.remove('d-none');
+      document.getElementById('loginCard').classList.add('d-none');
+      document.getElementById('appRoot').classList.remove('d-none');
+      workMsg('success','Sesión iniciada.');
+
+      await loadQuestionBank();
+      await loadHistory();
+      await renderDashboard();
+    });
+
+    // Init
     (async () => {
-      const { data } = await supabaseClient.auth.getSession();
-      if (data?.session?.user) {
-        currentUser = data.session.user;
-        setStateBadge('Autenticado', 'text-bg-success');
-        document.getElementById('btnLogout').disabled = false;
+      setEnvBadge();
+      setLoginMsg('secondary','Ingresa tus credenciales para continuar.');
+      workMsg('secondary','Listo.');
+      enableWorkButtons(false);
+
+      const { data } = await sb.auth.getUser();
+      if (data?.user){
+        currentUser = data.user;
+        document.getElementById('userBadge').textContent = (currentUser.email || 'Usuario');
+        document.getElementById('btnLogout').classList.remove('d-none');
+        document.getElementById('loginCard').classList.add('d-none');
+        document.getElementById('appRoot').classList.remove('d-none');
         enableWorkButtons(true);
         document.getElementById('btnApplyFilters').disabled = false;
         setLoginMsg('success', 'Sesión activa: ' + (currentUser.email || 'ok'));
