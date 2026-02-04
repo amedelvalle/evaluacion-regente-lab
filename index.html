@@ -442,7 +442,34 @@
     const SUPABASE_URL = "https://YOURPROJECT.supabase.co";
     const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
 
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let sb = null;
+
+    function isSupabaseConfigured(){
+      const urlOk =
+        typeof SUPABASE_URL === 'string' &&
+        SUPABASE_URL.startsWith('https://') &&
+        SUPABASE_URL.includes('.supabase.co') &&
+        !SUPABASE_URL.includes('YOURPROJECT');
+
+      const keyOk =
+        typeof SUPABASE_ANON_KEY === 'string' &&
+        SUPABASE_ANON_KEY.length > 40 &&
+        !SUPABASE_ANON_KEY.includes('YOUR_ANON_KEY');
+
+      return urlOk && keyOk;
+    }
+
+    function initSupabase(){
+      if (!isSupabaseConfigured()) return false;
+      try {
+        sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return true;
+      } catch (e){
+        console.error('Supabase init error:', e);
+        sb = null;
+        return false;
+      }
+    }
 
     // =============================
     // CONSTANTES (secciones/pesos)
@@ -475,6 +502,19 @@
     let lastDashboard = null;
 
     // =============================
+    // Helpers de IDs (soporta id o evaluation_id)
+    // =============================
+    function getEvalId(){
+      return currentEval?.id ?? currentEval?.evaluation_id ?? null;
+    }
+
+    function getEvalIdColumn(){
+      // Preferimos 'id' si existe, si no usamos 'evaluation_id'
+      if (currentEval && typeof currentEval.id !== 'undefined' && currentEval.id !== null) return 'id';
+      return 'evaluation_id';
+    }
+
+    // =============================
     // UI Helpers
     // =============================
     function setLoginMsg(type, text){
@@ -505,9 +545,9 @@
 
     function setEnvBadge(){
       const el = document.getElementById('envBadge');
-      const isProd = SUPABASE_URL.includes('supabase.co') && !SUPABASE_URL.includes('YOURPROJECT');
-      el.textContent = isProd ? 'Producción' : 'Config pendiente';
-      el.className = `badge ${isProd ? 'text-bg-success' : 'text-bg-warning'} pill`;
+      const ok = isSupabaseConfigured();
+      el.textContent = ok ? 'Producción' : 'Config pendiente';
+      el.className = `badge ${ok ? 'text-bg-success' : 'text-bg-warning'} pill`;
     }
 
     function enableWorkButtons(enabled){
@@ -535,8 +575,6 @@
       switchTab('tabDash');
     }
 
-    function esc(s){ return (s ?? '').toString(); }
-
     function escapeHtml(str) {
       return String(str ?? '')
         .replaceAll('&','&amp;')
@@ -550,6 +588,8 @@
     // AUTH
     // =============================
     async function login(email, password){
+      if (!sb) { setLoginMsg('danger','Supabase no está configurado.'); return null; }
+
       setLoginMsg('secondary','Autenticando…');
       document.getElementById('loginSpin').classList.remove('d-none');
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
@@ -559,11 +599,13 @@
     }
 
     async function logout(){
-      await sb.auth.signOut();
+      try { if (sb) await sb.auth.signOut(); } catch(e){}
+
       currentUser = null;
       currentEval = null;
       answersMap = new Map();
       lastDashboard = null;
+
       document.getElementById('appRoot').classList.add('d-none');
       document.getElementById('loginCard').classList.remove('d-none');
       document.getElementById('btnLogout').classList.add('d-none');
@@ -575,6 +617,8 @@
     // DATA: Load question bank
     // =============================
     async function loadQuestionBank(){
+      if (!sb) return;
+
       workMsg('secondary','Cargando banco de preguntas…');
 
       const { data, error } = await sb
@@ -616,7 +660,9 @@
     }
 
     async function loadOrCreateEvaluation(){
-      // Seleccionar evaluación "draft" más reciente del usuario, o crear nueva
+      if (!sb) return;
+
+      // Seleccionar evaluación más reciente del usuario (draft o submitted)
       const { data, error } = await sb
         .from('evaluations')
         .select('*')
@@ -633,8 +679,9 @@
       if (last && (last.status === 'draft' || last.status === 'submitted')) {
         currentEval = last;
       } else {
-        // crear (simple)
+        // crear (incluye evaluator_user_id para RLS/NOT NULL)
         const payload = {
+          evaluator_user_id: currentUser.id,
           evaluation_date: todayISO(),
           status: 'draft'
         };
@@ -668,9 +715,10 @@
     // DATA: Answers
     // =============================
     async function loadAnswers(){
-      if (!currentEval?.evaluation_id && !currentEval?.id) return;
+      if (!sb) return;
 
-      const evalId = currentEval.evaluation_id || currentEval.id;
+      const evalId = getEvalId();
+      if (!evalId) return;
 
       const { data, error } = await sb
         .from('evaluation_answers')
@@ -691,7 +739,11 @@
     }
 
     async function saveAnswer(question_id, score, evidence){
-      const evalId = currentEval.evaluation_id || currentEval.id;
+      if (!sb) return false;
+
+      const evalId = getEvalId();
+      if (!evalId) return false;
+
       const payload = {
         evaluation_id: evalId,
         question_id,
@@ -932,11 +984,16 @@
     // SUBMIT / DRAFT
     // =============================
     async function setEvaluationStatus(status){
-      const evalId = currentEval.evaluation_id || currentEval.id;
+      if (!sb) return false;
+
+      const evalId = getEvalId();
+      if (!evalId) return false;
+
+      const idCol = getEvalIdColumn();
       const { data, error } = await sb
         .from('evaluations')
         .update({ status })
-        .eq('evaluation_id', evalId)
+        .eq(idCol, evalId)
         .select()
         .single();
 
@@ -955,6 +1012,8 @@
     // HISTORY
     // =============================
     async function loadHistory(){
+      if (!sb) return;
+
       const list = document.getElementById('historyList');
       list.innerHTML = '<div class="soft">Cargando…</div>';
 
@@ -997,7 +1056,8 @@
     // PDF
     // =============================
     async function downloadPDF() {
-      if (!currentEval?.evaluation_id) return workMsg('danger','No hay evaluación abierta.');
+      const evalId = getEvalId();
+      if (!evalId) return workMsg('danger','No hay evaluación abierta.');
       if (currentEval.status !== 'submitted') {
         workMsg('warning','Para generar el PDF, primero finaliza la evaluación.');
         return;
@@ -1011,7 +1071,7 @@
       document.getElementById('pdfLab').textContent = currentEval.lab_name || '—';
 
       // Evaluador (snapshot desde evaluations)
-      const evName = currentEval.evaluator_full_name || '—';
+      const evName = currentEval.evaluator_full_name || (currentUser?.email || '—');
       const evRole = currentEval.evaluator_role || 'Evaluador';
       const evDate = currentEval.evaluation_date || todayISO();
 
@@ -1035,7 +1095,7 @@
         const rowEl = document.createElement('div');
         rowEl.innerHTML = `
           <div class="d-flex justify-content-between">
-            <div class="fw-semibold">${sec} <span class="badge text-bg-light pill ms-1">${w}%</span></div>
+            <div class="fw-semibold">${escapeHtml(sec)} <span class="badge text-bg-light pill ms-1">${w}%</span></div>
             <div class="mono">${avg === null ? 'N/E' : avg.toFixed(2)}</div>
           </div>
           <div class="progress" style="height: 10px;">
@@ -1083,7 +1143,7 @@
           box.className = 'p-2 bg-white border rounded avoid-break';
           box.innerHTML = `
             <div class="d-flex justify-content-between">
-              <div class="fw-semibold">#${it.question_id} (${it.section}) <span class="badge text-bg-light pill ms-1">${escapeHtml(it.kind)}</span></div>
+              <div class="fw-semibold">#${it.question_id} (${escapeHtml(it.section)}) <span class="badge text-bg-light pill ms-1">${escapeHtml(it.kind)}</span></div>
               <div class="mono">${escapeHtml(String(it.score))}</div>
             </div>
             <div class="small">${escapeHtml(it.text)}</div>
@@ -1095,15 +1155,13 @@
 
       const filename = `Evaluacion_Regente_${(currentEval.evaluatee_full_name || 'Regente').replaceAll(' ', '_')}_${currentEval.evaluation_date || todayISO()}.pdf`;
 
-      // ---- FIX PDF: render estable (evita página 1 en blanco / offsets) ----
       const pdfEl = document.getElementById('pdfReport');
 
       workMsg('info', 'Generando PDF...');
 
-      document.body.classList.add('is-exporting'); // activa estilos de exportación
+      document.body.classList.add('is-exporting');
       window.scrollTo(0, 0);
 
-      // Espera 1 frame para que el navegador aplique layout/estilos
       await new Promise(r => requestAnimationFrame(r));
 
       const opt = {
@@ -1124,6 +1182,9 @@
       try {
         await html2pdf().set(opt).from(pdfEl).save();
         workMsg('success', 'PDF descargado.');
+      } catch(e){
+        console.error(e);
+        workMsg('danger', 'Error generando PDF: ' + (e?.message || e));
       } finally {
         document.body.classList.remove('is-exporting');
       }
@@ -1157,12 +1218,14 @@
       const ok = await setEvaluationStatus('submitted');
       if (ok) workMsg('success','Evaluación finalizada.');
       await renderDashboard();
+      enableWorkButtons(true);
     });
 
     document.getElementById('btnSubmit2').addEventListener('click', async () => {
       const ok = await setEvaluationStatus('submitted');
       if (ok) workMsg('success','Evaluación finalizada.');
       await renderDashboard();
+      enableWorkButtons(true);
     });
 
     document.getElementById('btnPDFHere').addEventListener('click', async () => {
@@ -1215,23 +1278,40 @@
 
     // Init
     (async () => {
-      setEnvBadge();
-      setLoginMsg('secondary','Ingresa tus credenciales para continuar.');
-      workMsg('secondary','Listo.');
-      enableWorkButtons(false);
+      try {
+        setEnvBadge();
+        setLoginMsg('secondary','Ingresa tus credenciales para continuar.');
+        workMsg('secondary','Listo.');
+        enableWorkButtons(false);
 
-      const { data } = await sb.auth.getUser();
-      if (data?.user){
-        currentUser = data.user;
-        document.getElementById('userBadge').textContent = (currentUser.email || 'Usuario');
-        document.getElementById('btnLogout').classList.remove('d-none');
-        document.getElementById('loginCard').classList.add('d-none');
-        document.getElementById('appRoot').classList.remove('d-none');
-        enableWorkButtons(true);
-        document.getElementById('btnApplyFilters').disabled = false;
-        setLoginMsg('success', 'Sesión activa: ' + (currentUser.email || 'ok'));
-        await loadQuestionBank();
-        await loadHistory();
+        const ok = initSupabase();
+        if (!ok){
+          document.getElementById('btnLogin').disabled = true;
+          setLoginMsg('warning','Configura SUPABASE_URL y SUPABASE_ANON_KEY para habilitar login.');
+          workMsg('warning','Supabase no configurado (evita que el sitio se caiga).');
+          return;
+        }
+
+        // Sesión activa
+        const { data, error } = await sb.auth.getUser();
+        if (error) console.warn(error);
+
+        if (data?.user){
+          currentUser = data.user;
+          document.getElementById('userBadge').textContent = (currentUser.email || 'Usuario');
+          document.getElementById('btnLogout').classList.remove('d-none');
+          document.getElementById('loginCard').classList.add('d-none');
+          document.getElementById('appRoot').classList.remove('d-none');
+          enableWorkButtons(true);
+          setLoginMsg('success', 'Sesión activa: ' + (currentUser.email || 'ok'));
+          await loadQuestionBank();
+          await loadHistory();
+          await renderDashboard();
+        }
+      } catch (e){
+        console.error('Init crash:', e);
+        setLoginMsg('danger', 'Error inicializando la app (ver consola).');
+        workMsg('danger', e?.message || String(e));
       }
     })();
   </script>
